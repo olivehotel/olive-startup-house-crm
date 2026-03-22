@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsPage from "@/pages/leads";
@@ -18,7 +20,10 @@ import CommunityPage from "@/pages/community";
 import FinancialsPage from "@/pages/financials";
 import SettingsPage from "@/pages/settings";
 import HelpPage from "@/pages/help";
+import LoginPage from "@/pages/login";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { I18nProvider, useI18n } from "@/lib/i18n";
 
 function Router() {
   return (
@@ -39,11 +44,22 @@ function Router() {
   );
 }
 
-function App() {
+function AppContent() {
+  const { isAuthenticated, isAuthLoading, logout } = useAuth();
+  const { t } = useI18n();
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3.5rem",
   };
+
+  if (isAuthLoading) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -56,10 +72,21 @@ function App() {
                 <div className="flex items-center gap-2">
                   <SidebarTrigger data-testid="button-sidebar-toggle" />
                   <h1 className="text-sm font-medium text-muted-foreground hidden sm:block">
-                    Olive Startup House
+                    {t("header.appName")}
                   </h1>
                 </div>
-                <ThemeToggle />
+                <div className="flex items-center gap-2">
+                  <LanguageSwitcher />
+                  <ThemeToggle />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={logout}
+                    data-testid="button-logout"
+                  >
+                    {t("header.logout")}
+                  </Button>
+                </div>
               </header>
               <ScrollArea className="flex-1">
                 <main className="min-h-full">
@@ -72,6 +99,16 @@ function App() {
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
+  );
+}
+
+function App() {
+  return (
+    <I18nProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </I18nProvider>
   );
 }
 
