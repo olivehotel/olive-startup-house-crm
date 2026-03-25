@@ -48,12 +48,30 @@ export const insertLeadSchema = z.object({
 
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 
-// Communication Types
-export const communicationTypes = ["Text/SMS", "Phone Call", "Video Tour", "In-Person", "Email"] as const;
-export type CommunicationType = typeof communicationTypes[number];
+// Communication Channels (UUID → label)
+export const communicationChannels = {
+  "1aace77e-c42e-49b6-af47-5668e8536307": "Phone/Call",
+  "22583210-1707-4f36-a5c6-050b37ce3728": "Email",
+  "95ef84c5-e52b-425e-9033-73d2e467d917": "Text/SMS",
+  "a8a1b0e0-22b6-4d06-8b97-91f110957666": "Video Tour",
+  "e79af83c-6114-4332-9006-d77efbd3019d": "In Person",
+} as const;
 
-export const communicationStatuses = ["Docs Requested", "In Progress", "Link Sent", "Form Filled", "Pending", "Completed"] as const;
-export type CommunicationStatus = typeof communicationStatuses[number];
+export type CommunicationChannelId = keyof typeof communicationChannels;
+export type CommunicationChannelValue = typeof communicationChannels[CommunicationChannelId];
+
+// Communication Statuses (UUID → label)
+export const communicationStatuses = {
+  "1e97f499-e9a7-483a-a600-7958d3b86e11": "Form Filled",
+  "4ac23f91-2d5a-483b-8dea-59b2b9629800": "Docs Requested",
+  "64d9e4e4-22c3-4383-a2b8-5a7b1be755e5": "In Progress",
+  "8e39cddd-1ab3-43e4-baf4-1e538c02c347": "Pending",
+  "e95c2a25-a4b4-4cbb-855c-6246cdf0aaf9": "Completed",
+  "eee82c30-bdfc-4a42-86e7-f2a995ae5097": "Link Sent",
+} as const;
+
+export type CommunicationStatusId = keyof typeof communicationStatuses;
+export type CommunicationStatusValue = typeof communicationStatuses[CommunicationStatusId];
 
 // Communication
 export interface Communication {
@@ -61,19 +79,22 @@ export interface Communication {
   leadId: string;
   leadName: string;
   leadAvatar?: string;
-  type: CommunicationType;
-  status: CommunicationStatus;
+  type: CommunicationChannelId;
+  status: CommunicationStatusId;
   message: string;
   nextAction: string;
   timestamp: string;
 }
 
+const channelIds = Object.keys(communicationChannels) as [CommunicationChannelId, ...CommunicationChannelId[]];
+const statusIds = Object.keys(communicationStatuses) as [CommunicationStatusId, ...CommunicationStatusId[]];
+
 export const insertCommunicationSchema = z.object({
   leadId: z.string(),
   leadName: z.string(),
   leadAvatar: z.string().optional(),
-  type: z.enum(communicationTypes),
-  status: z.enum(communicationStatuses),
+  type: z.enum(channelIds),
+  status: z.enum(statusIds),
   message: z.string(),
   nextAction: z.string(),
 });
