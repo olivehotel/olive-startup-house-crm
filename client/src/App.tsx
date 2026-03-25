@@ -12,6 +12,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsPage from "@/pages/leads";
 import CommunicationPage from "@/pages/communication";
+import CommunicationMessagesPage from "@/pages/communication-messages";
 import ScreeningPage from "@/pages/screening";
 import OnboardingPage from "@/pages/onboarding";
 import EcoSmartPage from "@/pages/ecosmart";
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/leads" component={LeadsPage} />
       <Route path="/communication" component={CommunicationPage} />
+      <Route path="/communication/:id" component={CommunicationMessagesPage} />
       <Route path="/screening" component={ScreeningPage} />
       <Route path="/onboarding" component={OnboardingPage} />
       <Route path="/ecosmart" component={EcoSmartPage} />

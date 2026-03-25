@@ -29,25 +29,31 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "wouter";
+import { communicationChannels, communicationStatuses } from "@shared/schema";
 import type { Communication, CommunicationStats } from "@shared/schema";
+import { getCommunications } from "@/actions/communications";
 
 export default function CommunicationPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [, navigate] = useLocation();
 
   const { data: communications, isLoading } = useQuery<Communication[]>({
-    queryKey: ["/api/communications"],
+    queryKey: ["communications"],
+    queryFn: getCommunications,
   });
 
+  console.log(communications,'communications');
   const { data: stats } = useQuery<CommunicationStats>({
     queryKey: ["/api/communications/stats"],
   });
 
   const filteredComms = communications?.filter((comm) => {
-    const matchesSearch = comm.leadName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === "all" || comm.type === typeFilter;
-    const matchesStatus = statusFilter === "all" || comm.status === statusFilter;
+    const matchesSearch = comm.contact_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = typeFilter === "all" || comm.channel_id === typeFilter;
+    const matchesStatus = statusFilter === "all" || comm.status_id === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
   });
 
@@ -157,11 +163,9 @@ export default function CommunicationPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Channels</SelectItem>
-                <SelectItem value="Text/SMS">Text/SMS</SelectItem>
-                <SelectItem value="Phone Call">Phone Call</SelectItem>
-                <SelectItem value="Video Tour">Video Tour</SelectItem>
-                <SelectItem value="In-Person">In-Person</SelectItem>
-                <SelectItem value="Email">Email</SelectItem>
+                {(Object.entries(communicationChannels) as [string, string][]).map(([id, label]) => (
+                  <SelectItem key={id} value={id}>{label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -170,12 +174,9 @@ export default function CommunicationPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="Docs Requested">Docs Requested</SelectItem>
-                <SelectItem value="In Progress">In Progress</SelectItem>
-                <SelectItem value="Link Sent">Link Sent</SelectItem>
-                <SelectItem value="Form Filled">Form Filled</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
+                {(Object.entries(communicationStatuses) as [string, string][]).map(([id, label]) => (
+                  <SelectItem key={id} value={id}>{label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -201,7 +202,11 @@ export default function CommunicationPage() {
               </div>
             ) : (
               filteredComms?.map((comm) => (
-                <CommunicationCard key={comm.id} communication={comm} />
+                <CommunicationCard
+                  key={comm.id}
+                  communication={comm}
+                  onClick={() => navigate(`/communication/${comm.id}`)}
+                />
               ))
             )}
           </div>
