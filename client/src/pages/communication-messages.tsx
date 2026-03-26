@@ -26,20 +26,58 @@ function formatDate(dateString: string) {
 
 function cleanMessageText(raw: string): string {
   let text = raw
+    // Strip <style> blocks and all HTML tags
     .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<[^>]+>/g, " ")
+    // Decode HTML entities
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'");
+    .replace(/&#39;/gi, "'")
+    // Fix common mojibake (UTF-8 read as Latin-1)
+    .replace(/â€™/g, "'")
+    .replace(/â€œ/g, "\u201C")
+    .replace(/â€/g, "\u201D")
+    .replace(/â€"/g, "\u2014")
+    .replace(/â€¢/g, "•")
+    .replace(/Â©/g, "©")
+    .replace(/Â®/g, "®")
+    .replace(/Â°/g, "°")
+    .replace(/ï»¿/g, "")
+    // Strip leaked CSS rule blocks (.class-name { ... })
+    .replace(/\.[a-z][\w-]*\s*\{[^}]*\}/gi, "")
+    // Remove Meetup-style labeled tracking links: ( http://... )
+    .replace(/\(\s*https?:\/\/\S+\s*\)/g, "");
 
   const lines = text.split(/\r?\n/);
-  const quoteStart = lines.findIndex((line) =>
-    /^(On .+wrote:|>|\s*_{3,}|\s*-{3,})/.test(line.trim()),
-  );
-  const trimmedLines = quoteStart > 0 ? lines.slice(0, quoteStart) : lines;
+
+  const cleaned = lines.filter((line) => {
+    const t = line.trim();
+    // Drop bare long tracking/obfuscated URLs
+    if (/^https?:\/\/\S{50,}$/.test(t)) return false;
+    // Drop email footer boilerplate lines
+    if (
+      /unsubscribe|privacy policy|you received this (message|email)|manage your settings|report this message|block message sender|copyright.*\d{4}|all rights reserved|please don.t reply|do not reply|visit your account/i.test(
+        t,
+      )
+    )
+      return false;
+    return true;
+  });
+
+  // Trim quoted reply sections (everything from "On ... wrote:" onwards)
+  // Also catches non-English (e.g. Russian) attribution lines via year+HH:MM+trailing colon
+  const quoteStart = cleaned.findIndex((line) => {
+    const t = line.trim();
+    return (
+      /^(On .+wrote:|>|\s*_{3,}|\s*-{3,})/.test(t) ||
+      /\d{4}.{0,80}\d{1,2}:\d{2}.{0,80}:$/.test(t)
+    );
+  });
+  const trimmedLines = quoteStart > 0 ? cleaned.slice(0, quoteStart) : cleaned;
 
   return trimmedLines
     .join("\n")
