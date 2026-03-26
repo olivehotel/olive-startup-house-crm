@@ -66,7 +66,7 @@ export function CommunicationCard({
   communication,
   onClick,
 }: CommunicationCardProps) {
-  const initials = communication.contact_name
+  const initials = (communication.contact_name ?? "")
     .split(" ")
     .map((n) => n[0])
     .join("")

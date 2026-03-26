@@ -51,7 +51,7 @@ export default function CommunicationPage() {
   });
 
   const filteredComms = communications?.filter((comm) => {
-    const matchesSearch = comm.contact_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (comm.contact_name ?? "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = typeFilter === "all" || comm.channel_id === typeFilter;
     const matchesStatus = statusFilter === "all" || comm.status_id === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
