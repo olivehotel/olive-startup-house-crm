@@ -242,6 +242,8 @@ export default function CommunicationMessagesPage() {
     }
   }
 
+  console.log(comm,'comm in messages page')
+
   return (
     <div className="flex flex-col h-[calc(100dvh-53px)] w-full max-w-3xl mx-auto">
       {/* Header */}
@@ -335,6 +337,12 @@ export default function CommunicationMessagesPage() {
 
       {/* Compose bar */}
       <div className="border-t bg-background px-3 py-3 sm:px-6 sm:py-4 shrink-0 flex flex-col gap-2">
+        <Input
+          placeholder="Subject"
+          value={`From: ${comm?.main_mail || ''}`}
+          onChange={(e) => null}
+          className="text-sm"
+        />
         <Input
           placeholder="Subject"
           value={subject}
