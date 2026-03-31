@@ -144,14 +144,37 @@ function HtmlEmailBody({ html, scopeId }: { html: string; scopeId: string }) {
       a.setAttribute("rel", "noopener noreferrer");
     });
 
+    doc.querySelectorAll("img, table, td, th, div").forEach((el) => {
+      el.removeAttribute("width");
+      el.removeAttribute("height");
+      const style = el.getAttribute("style");
+      if (style) {
+        el.setAttribute(
+          "style",
+          style
+            .replace(/\bwidth\s*:\s*[^;]+;?/gi, "")
+            .replace(/\bmax-width\s*:\s*[^;]+;?/gi, "")
+            .replace(/\bmin-width\s*:\s*[^;]+;?/gi, ""),
+        );
+      }
+    });
+
+    const responsiveOverrides = `
+      .${scope} { width: 100%; }
+      .${scope} * { box-sizing: border-box !important; max-width: 100% !important; }
+      .${scope} img { height: auto !important; display: block; }
+      .${scope} table { width: 100% !important; table-layout: fixed !important; }
+      .${scope} td, .${scope} th { word-break: break-word !important; }
+    `;
+
     return {
       bodyHtml: doc.body.innerHTML,
-      scopedCss: rawCss ? scopeCss(rawCss, `.${scope}`) : "",
+      scopedCss: (rawCss ? scopeCss(rawCss, `.${scope}`) : "") + responsiveOverrides,
     };
   }, [html, scope]);
 
   return (
-    <div className={`${scope} text-sm leading-relaxed overflow-x-auto`}>
+    <div className={`${scope} text-sm leading-relaxed w-full overflow-hidden`}>
       {scopedCss && <style>{scopedCss}</style>}
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
     </div>
