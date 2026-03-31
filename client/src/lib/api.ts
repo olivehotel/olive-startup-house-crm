@@ -5,6 +5,7 @@ export const FUNCTIONS_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/function
 interface FetchOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
   body?: unknown;
+  params?: Record<string, string | number>;
 }
 
 export async function apiFetch<T>(
@@ -15,9 +16,14 @@ export async function apiFetch<T>(
     data: { session },
   } = await supabase.auth.getSession();
 
-  const { method = "GET", body } = options;
+  const { method = "GET", body, params } = options;
 
-  const res = await fetch(`${FUNCTIONS_BASE_URL}/${endpoint}`, {
+  const url = new URL(`${FUNCTIONS_BASE_URL}/${endpoint}`);
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  }
+
+  const res = await fetch(url.toString(), {
     method,
     headers: {
       "Content-Type": "application/json",

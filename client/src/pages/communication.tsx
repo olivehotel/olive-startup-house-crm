@@ -27,6 +27,8 @@ import {
   CheckCircle,
   Calendar,
   Zap,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -38,14 +40,17 @@ export default function CommunicationPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [, navigate] = useLocation();
 
-  const { data: communications, isLoading } = useQuery<Communication[]>({
-    queryKey: ["communications"],
-    queryFn: getCommunications,
+  const { data: communicationsData, isLoading } = useQuery({
+    queryKey: ["communications", page],
+    queryFn: () => getCommunications(page),
   });
 
-  console.log(communications,'communications');
+  const communications = communicationsData?.communications;
+  const pagination = communicationsData?.pagination;
+
   const { data: stats } = useQuery<CommunicationStats>({
     queryKey: ["/api/communications/stats"],
   });
@@ -212,6 +217,31 @@ export default function CommunicationPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {pagination && pagination.total_pages > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {pagination.page} of {pagination.total_pages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={!pagination.has_next_page}
+          >
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      )}
 
       {/* Live Updates Banner */}
       <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">

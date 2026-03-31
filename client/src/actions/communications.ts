@@ -1,9 +1,10 @@
 import { apiFetch } from "@/lib/api";
-import type { Communication, CommunicationMessagesResponse } from "@shared/schema";
+import type { Communication, CommunicationMessagesResponse, Pagination } from "@shared/schema";
 
-export const getCommunications = () =>
-  apiFetch<{ communications: Communication[] }>("get-communications").then(
-    (res) => res.communications,
+export const getCommunications = (page = 1) =>
+  apiFetch<{ communications: Communication[]; pagination: Pagination }>(
+    "get-communications",
+    { params: { page } },
   );
 
 export const getCommunicationMessages = (communicationId: string) =>

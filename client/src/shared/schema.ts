@@ -73,6 +73,15 @@ export const communicationStatuses = {
 export type CommunicationStatusId = keyof typeof communicationStatuses;
 export type CommunicationStatusValue = typeof communicationStatuses[CommunicationStatusId];
 
+// Pagination
+export interface Pagination {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_next_page: boolean;
+}
+
 // Communication
 export interface Communication {
   id: string;

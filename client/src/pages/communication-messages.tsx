@@ -27,11 +27,9 @@ function formatDate(dateString: string) {
 
 function cleanMessageText(raw: string): string {
   let text = raw
-    // Strip <style> blocks and all HTML tags
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<[^>]+>/g, " ")
-    // Decode HTML entities
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
@@ -48,7 +46,6 @@ function cleanMessageText(raw: string): string {
     .replace(/Â®/g, "®")
     .replace(/Â°/g, "°")
     .replace(/ï»¿/g, "")
-    // Strip leaked CSS rule blocks (.class-name { ... })
     .replace(/\.[a-z][\w-]*\s*\{[^}]*\}/gi, "")
     // Remove Meetup-style labeled tracking links: ( http://... )
     .replace(/\(\s*https?:\/\/\S+\s*\)/g, "");
