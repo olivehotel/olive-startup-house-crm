@@ -25,32 +25,38 @@ import {
   Leaf,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuth } from "@/lib/auth";
 
 const mainNavItems = [
   {
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
+    highlight: false,
   },
   {
     title: "Lead Pipeline",
     url: "/leads",
     icon: Users,
+    highlight: false,
   },
   {
     title: "Communication",
     url: "/communication",
     icon: MessageSquare,
+    highlight: true,
   },
   {
     title: "Screening",
     url: "/screening",
     icon: ClipboardCheck,
+    highlight: false,
   },
   {
     title: "Onboarding",
     url: "/onboarding",
     icon: UserPlus,
+    highlight: false,
   },
 ];
 
@@ -59,21 +65,25 @@ const operationsItems = [
     title: "EcoSmart",
     url: "/ecosmart",
     icon: Calendar,
+    highlight: true,
   },
   {
     title: "Properties",
     url: "/properties",
     icon: Building2,
+    highlight: false,
   },
   {
     title: "Community Hub",
     url: "/community",
     icon: Users,
+    highlight: false,
   },
   {
     title: "Financial Reports",
     url: "/financials",
     icon: DollarSign,
+    highlight: false,
   },
 ];
 
@@ -92,6 +102,9 @@ const bottomItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { userEmail, userName } = useAuth();
+  const displayName = userName ?? (userEmail ? userEmail.split("@")[0] : "");
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
     <Sidebar>
@@ -118,9 +131,10 @@ export function AppSidebar() {
                     asChild
                     isActive={location === item.url}
                     data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
+                    className={item.highlight ? "font-semibold text-primary" : ""}
                   >
                     <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
+                      <item.icon className={`h-4 w-4${item.highlight ? " text-primary" : ""}`} />
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -140,9 +154,10 @@ export function AppSidebar() {
                     asChild
                     isActive={location === item.url}
                     data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
+                    className={item.highlight ? "font-semibold text-primary" : ""}
                   >
                     <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
+                      <item.icon className={`h-4 w-4${item.highlight ? " text-primary" : ""}`} />
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -179,12 +194,12 @@ export function AppSidebar() {
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-              AD
+              {initials}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col flex-1 min-w-0">
-            <span className="text-sm font-medium text-sidebar-foreground truncate">Admin User</span>
-            <span className="text-xs text-muted-foreground truncate">admin@olive.house</span>
+            <span className="text-sm font-medium text-sidebar-foreground truncate">{displayName}</span>
+            <span className="text-xs text-muted-foreground truncate">{userEmail}</span>
           </div>
         </div>
       </SidebarFooter>

@@ -7,7 +7,6 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsPage from "@/pages/leads";
@@ -78,7 +77,6 @@ function AppContent() {
                   </h1>
                 </div>
                 <div className="flex items-center gap-2">
-                  <LanguageSwitcher />
                   <ThemeToggle />
                   <Button
                     size="sm"

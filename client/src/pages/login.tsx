@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { useLocation } from "wouter";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -157,10 +156,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-background p-4 sm:p-6">
-      <div className="mx-auto flex w-full max-w-5xl justify-end">
-        <LanguageSwitcher />
-      </div>
-      <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-5xl items-center justify-center">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-5xl items-center justify-center">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>{t("auth.title")}</CardTitle>

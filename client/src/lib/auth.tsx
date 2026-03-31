@@ -5,6 +5,7 @@ import { requestPasswordReset as requestPasswordResetAction, signIn as signInAct
 type AuthContextValue = {
   isAuthenticated: boolean;
   userEmail: string | null;
+  userName: string | null;
   isAuthLoading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signUp: (email: string, password: string) => Promise<{ ok: boolean; hasSession?: boolean; error?: string }>;
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   useEffect(() => {
@@ -25,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.auth.getSession();
       if (!isMounted) return;
       setUserEmail(data.session?.user.email ?? null);
+      setUserName(data.session?.user.user_metadata?.full_name ?? null);
       setIsAuthLoading(false);
     };
 
@@ -34,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user.email ?? null);
+      setUserName(session?.user.user_metadata?.full_name ?? null);
       setIsAuthLoading(false);
     });
 
@@ -63,13 +67,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       isAuthenticated: Boolean(userEmail),
       userEmail,
+      userName,
       isAuthLoading,
       login,
       signUp,
       requestPasswordReset,
       logout,
     }),
-    [userEmail, isAuthLoading],
+    [userEmail, userName, isAuthLoading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
