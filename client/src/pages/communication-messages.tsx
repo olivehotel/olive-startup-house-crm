@@ -174,6 +174,9 @@ function HtmlEmailBody({ html, scopeId }: { html: string; scopeId: string }) {
       .${scope} table { width: 100% !important; table-layout: fixed !important; }
       .${scope} td, .${scope} th { word-break: break-word !important; }
       .${scope} blockquote { border-left: none !important; padding-left: 0 !important; margin-left: 0 !important; }
+      @media (max-width: 640px) {
+        .${scope} img { max-width: 60% !important; }
+      }
     `;
 
     return {
