@@ -46,7 +46,7 @@ export default function LeadsPage() {
   const avgBudget = leads?.length ? Math.round(totalBudget / leads.length) : 0;
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-[1400px] mx-auto">
+    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -54,18 +54,21 @@ export default function LeadsPage() {
           <p className="text-muted-foreground">Manage and track all incoming leads from various sources</p>
         </div>
         <Button data-testid="button-add-lead">
-          <Plus           <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4 mr-2" />
           Add New Lead
-v className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-                   <div className="flex items-center gap-3">
               <div className="p-2 rounded-md bg-primary/10">
                 <Users className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-xl sm:text-2xl font-bold">{leads?.length || 0}</p>
+                <p className="text-2xl font-bold">{leads?.length || 0}</p>
                 <p className="text-sm text-muted-foreground">Total Leads</p>
               </div>
             </div>
@@ -78,7 +81,7 @@ v className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-xl sm:text-2xl font-bold">{leadsByStatus.New}</p>
+                <p className="text-2xl font-bold">{leadsByStatus.New}</p>
                 <p className="text-sm text-muted-foreground">New This Week</p>
               </div>
             </div>
@@ -91,7 +94,7 @@ v className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Target className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <p className="text-xl sm:text-2xl font-bold">{leadsByStatus.Qualified}</p>
+                <p className="text-2xl font-bold">{leadsByStatus.Qualified}</p>
                 <p className="text-sm text-muted-foreground">Qualified</p>
               </div>
             </div>
@@ -100,7 +103,11 @@ v className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-Name="text-xl sm:text-2xl font-bold">${avgBudget.toLocaleString()}</p>
+              <div className="p-2 rounded-md bg-emerald-100 dark:bg-emerald-900/30">
+                <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">${avgBudget.toLocaleString()}</p>
                 <p className="text-sm text-muted-foreground">Avg Budget</p>
               </div>
             </div>
@@ -146,25 +153,23 @@ Name="text-xl sm:text-2xl font-bold">${avgBudget.toLocaleString()}</p>
       <Card>
         <CardHeader className="pb-3">
           <Tabs value={statusTab} onValueChange={setStatusTab}>
-            <div className="overflow-x-auto -mx-1 px-1">
-              <TabsList className="w-max">
-                <TabsTrigger value="all">
-                  All Leads <Badge variant="secondary" className="ml-2">{leadsByStatus.all}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="New">
-                  New <Badge variant="secondary" className="ml-2">{leadsByStatus.New}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="Contacted">
-                  Contacted <Badge variant="secondary" className="ml-2">{leadsByStatus.Contacted}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="Qualified">
-                  Qualified <Badge variant="secondary" className="ml-2">{leadsByStatus.Qualified}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="Converted">
-                  Converted <Badge variant="secondary" className="ml-2">{leadsByStatus.Converted}</Badge>
-                </TabsTrigger>
-              </TabsList>
-            </div>
+            <TabsList>
+              <TabsTrigger value="all">
+                All Leads <Badge variant="secondary" className="ml-2">{leadsByStatus.all}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="New">
+                New <Badge variant="secondary" className="ml-2">{leadsByStatus.New}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="Contacted">
+                Contacted <Badge variant="secondary" className="ml-2">{leadsByStatus.Contacted}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="Qualified">
+                Qualified <Badge variant="secondary" className="ml-2">{leadsByStatus.Qualified}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="Converted">
+                Converted <Badge variant="secondary" className="ml-2">{leadsByStatus.Converted}</Badge>
+              </TabsTrigger>
+            </TabsList>
           </Tabs>
         </CardHeader>
         <CardContent>
