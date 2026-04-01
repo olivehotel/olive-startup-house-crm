@@ -101,7 +101,7 @@ export default function Dashboard() {
   const roomOccupancy = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
 
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto">
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {statsLoading ? (
@@ -161,14 +161,14 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Communication Center */}
         <Card className="overflow-visible">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
             <div>
               <CardTitle className="text-lg">Communication Center</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 Manage all prospect communications across multiple channels
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-shrink-0">
               <Button variant="outline" size="sm" asChild>
                 <Link href="/communication" data-testid="link-communication-open">
                   <ExternalLink className="h-4 w-4 mr-1" />
@@ -183,28 +183,28 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Communication Stats */}
-            <div className="grid grid-cols-5 gap-2">
-              <div className="text-center p-2 rounded-md bg-muted/50">
+            <div className="grid grid-cols-5 gap-1 sm:gap-2">
+              <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <MessageSquare className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{commStats?.textMessages || 0}</p>
                 <p className="text-xs text-muted-foreground">Text</p>
               </div>
-              <div className="text-center p-2 rounded-md bg-muted/50">
+              <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Phone className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{commStats?.phoneCalls || 0}</p>
                 <p className="text-xs text-muted-foreground">Calls</p>
               </div>
-              <div className="text-center p-2 rounded-md bg-muted/50">
+              <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Video className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{commStats?.videoTours || 0}</p>
                 <p className="text-xs text-muted-foreground">Video</p>
               </div>
-              <div className="text-center p-2 rounded-md bg-muted/50">
+              <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Calendar className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{commStats?.inPersonTours || 0}</p>
                 <p className="text-xs text-muted-foreground">Tours</p>
               </div>
-              <div className="text-center p-2 rounded-md bg-muted/50">
+              <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Mail className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{commStats?.emails || 0}</p>
                 <p className="text-xs text-muted-foreground">Emails</p>
@@ -256,14 +256,14 @@ export default function Dashboard() {
 
         {/* Lead Pipeline */}
         <Card className="overflow-visible">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
             <div>
               <CardTitle className="text-lg">Lead Pipeline</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 Manage and track all incoming leads
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-shrink-0">
               <Button variant="outline" size="sm" asChild>
                 <Link href="/leads" data-testid="link-leads-open">
                   <ExternalLink className="h-4 w-4 mr-1" />
@@ -324,7 +324,7 @@ export default function Dashboard() {
 
         {/* Background Checks */}
         <Card className="overflow-visible">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+          <CardHeader className="flex flex-row items-start sm:items-center justify-between gap-2 pb-3">
             <div>
               <CardTitle className="text-lg">Background Checks</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Pipeline Summary</p>
@@ -338,27 +338,27 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Status Summary */}
-            <div className="grid grid-cols-4 gap-3">
-              <div className="text-center p-3 rounded-md bg-blue-50 dark:bg-blue-900/20">
-                <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
+            <div className="grid grid-cols-4 gap-2 sm:gap-3">
+              <div className="text-center p-2 sm:p-3 rounded-md bg-blue-50 dark:bg-blue-900/20">
+                <p className="text-lg sm:text-xl font-bold text-blue-700 dark:text-blue-400">
                   {screenings?.filter(s => s.status === "In Progress").length || 0}
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400">In Progress</p>
               </div>
-              <div className="text-center p-3 rounded-md bg-emerald-50 dark:bg-emerald-900/20">
-                <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">
+              <div className="text-center p-2 sm:p-3 rounded-md bg-emerald-50 dark:bg-emerald-900/20">
+                <p className="text-lg sm:text-xl font-bold text-emerald-700 dark:text-emerald-400">
                   {screenings?.filter(s => s.status === "Approved").length || 0}
                 </p>
                 <p className="text-xs text-emerald-600 dark:text-emerald-400">Approved</p>
               </div>
-              <div className="text-center p-3 rounded-md bg-amber-50 dark:bg-amber-900/20">
-                <p className="text-xl font-bold text-amber-700 dark:text-amber-400">
+              <div className="text-center p-2 sm:p-3 rounded-md bg-amber-50 dark:bg-amber-900/20">
+                <p className="text-lg sm:text-xl font-bold text-amber-700 dark:text-amber-400">
                   {screenings?.filter(s => s.status === "Flagged").length || 0}
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400">Flagged</p>
               </div>
-              <div className="text-center p-3 rounded-md bg-red-50 dark:bg-red-900/20">
-                <p className="text-xl font-bold text-red-700 dark:text-red-400">
+              <div className="text-center p-2 sm:p-3 rounded-md bg-red-50 dark:bg-red-900/20">
+                <p className="text-lg sm:text-xl font-bold text-red-700 dark:text-red-400">
                   {screenings?.filter(s => s.status === "Rejected").length || 0}
                 </p>
                 <p className="text-xs text-red-600 dark:text-red-400">Rejected</p>
@@ -392,7 +392,7 @@ export default function Dashboard() {
 
         {/* Onboarding & Billing */}
         <Card className="overflow-visible">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+          <CardHeader className="flex flex-row items-start sm:items-center justify-between gap-2 pb-3">
             <div>
               <CardTitle className="text-lg">Onboarding & Billing</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Member orientation and invoices</p>
@@ -406,16 +406,16 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-md bg-muted/50">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="p-3 sm:p-4 rounded-md bg-muted/50">
                 <p className="text-sm text-muted-foreground">Active Onboarding</p>
-                <p className="text-2xl font-bold mt-1">
+                <p className="text-xl sm:text-2xl font-bold mt-1">
                   {onboardings?.filter(o => o.status !== "Complete").length || 0}
                 </p>
               </div>
-              <div className="p-4 rounded-md bg-muted/50">
+              <div className="p-3 sm:p-4 rounded-md bg-muted/50">
                 <p className="text-sm text-muted-foreground">Invoices Pending</p>
-                <p className="text-2xl font-bold mt-1 text-primary">
+                <p className="text-xl sm:text-2xl font-bold mt-1 text-primary">
                   ${onboardings?.filter(o => !o.invoicePaid).reduce((sum, o) => sum + o.monthlyRent, 0).toLocaleString() || 0}
                 </p>
               </div>
@@ -449,14 +449,14 @@ export default function Dashboard() {
 
       {/* Financial Reporting */}
       <Card className="overflow-visible">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
           <div>
             <CardTitle className="text-lg">Financial Reporting</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
               Revenue analytics, P&L statements, and financial performance
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-shrink-0">
             <Button variant="outline" size="sm" asChild>
               <Link href="/financials" data-testid="link-financials-open">
                 <ExternalLink className="h-4 w-4 mr-1" />
@@ -469,34 +469,34 @@ export default function Dashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="p-4 rounded-md bg-muted/50">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5 sm:mb-6">
+            <div className="p-3 sm:p-4 rounded-md bg-muted/50">
               <p className="text-sm text-muted-foreground">Total Revenue</p>
-              <p className="text-2xl font-bold mt-1">${((financials?.totalRevenue || 0) / 1000).toFixed(1)}k</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1">${((financials?.totalRevenue || 0) / 1000).toFixed(1)}k</p>
               <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
                 <TrendingUp className="h-3 w-3" />
                 {financials?.revenueChange || 0}% vs last month
               </p>
             </div>
-            <div className="p-4 rounded-md bg-muted/50">
+            <div className="p-3 sm:p-4 rounded-md bg-muted/50">
               <p className="text-sm text-muted-foreground">Net Profit</p>
-              <p className="text-2xl font-bold mt-1">${((financials?.netProfit || 0) / 1000).toFixed(1)}k</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1">${((financials?.netProfit || 0) / 1000).toFixed(1)}k</p>
               <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
                 <TrendingUp className="h-3 w-3" />
                 {financials?.profitChange || 0}% vs last month
               </p>
             </div>
-            <div className="p-4 rounded-md bg-muted/50">
+            <div className="p-3 sm:p-4 rounded-md bg-muted/50">
               <p className="text-sm text-muted-foreground">Profit Margin</p>
-              <p className="text-2xl font-bold mt-1">{financials?.profitMargin || 0}%</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1">{financials?.profitMargin || 0}%</p>
               <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
                 <TrendingUp className="h-3 w-3" />
                 +{financials?.marginChange || 0}% vs last month
               </p>
             </div>
-            <div className="p-4 rounded-md bg-muted/50">
+            <div className="p-3 sm:p-4 rounded-md bg-muted/50">
               <p className="text-sm text-muted-foreground">Avg Occupancy</p>
-              <p className="text-2xl font-bold mt-1">{financials?.avgOccupancy || 0}%</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1">{financials?.avgOccupancy || 0}%</p>
               <p className="text-xs text-muted-foreground mt-1">Across all properties</p>
             </div>
           </div>
@@ -534,7 +534,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Occupancy Overview */}
         <Card className="overflow-visible">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+          <CardHeader className="flex flex-row items-start sm:items-center justify-between gap-2 pb-3">
             <div>
               <CardTitle className="text-lg">Occupancy Overview</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Current occupancy by house</p>
@@ -548,17 +548,17 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {/* Summary */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-3 rounded-md bg-muted/50">
-                <p className="text-2xl font-bold">{properties?.length || 0}</p>
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
+              <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
+                <p className="text-xl sm:text-2xl font-bold">{properties?.length || 0}</p>
                 <p className="text-xs text-muted-foreground">Total Properties</p>
               </div>
-              <div className="text-center p-3 rounded-md bg-muted/50">
-                <p className="text-2xl font-bold">{bedOccupancy}%</p>
+              <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
+                <p className="text-xl sm:text-2xl font-bold">{bedOccupancy}%</p>
                 <p className="text-xs text-muted-foreground">Bed Occupancy ({occupiedBeds}/{totalBeds})</p>
               </div>
-              <div className="text-center p-3 rounded-md bg-muted/50">
-                <p className="text-2xl font-bold">{roomOccupancy}%</p>
+              <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
+                <p className="text-xl sm:text-2xl font-bold">{roomOccupancy}%</p>
                 <p className="text-xs text-muted-foreground">Room Occupancy ({occupiedRooms}/{totalRooms})</p>
               </div>
             </div>
@@ -580,7 +580,7 @@ export default function Dashboard() {
 
         {/* Community Hub */}
         <Card className="overflow-visible">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+          <CardHeader className="flex flex-row items-start sm:items-center justify-between gap-2 pb-3">
             <div>
               <CardTitle className="text-lg">Community Hub</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Co-living & co-working engagement</p>
