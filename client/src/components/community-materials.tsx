@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,9 +19,10 @@ import {
   Loader2,
   Video,
   Link2,
+  ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { InsertMaterial, MaterialTypeId } from "@shared/schema";
+import type { InsertMaterial, MaterialTypeId, CommunityDocument } from "@shared/schema";
 import { insertMaterialSchema, materialTypes, materialTypeIds } from "@shared/schema";
 import { FileDropZone } from "@/components/file-drop-zone";
 
@@ -53,6 +54,8 @@ export function CommunityMaterials() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mainFile, setMainFile] = useState<File | null>(null);
+  const [documents, setDocuments] = useState<CommunityDocument[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(true);
 
   const form = useForm<InsertMaterial>({
     resolver: zodResolver(insertMaterialSchema),
@@ -61,6 +64,21 @@ export function CommunityMaterials() {
 
   const selectedType = form.watch("type") as MaterialTypeId;
   const isLinkType = selectedType === LINK_TYPE_ID;
+
+  const fetchDocuments = async () => {
+    setLoadingDocuments(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("get_community_documents");
+      if (error) throw error;
+      setDocuments(data?.documents ?? []);
+    } catch {
+      // silently fail; empty state shown
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  useEffect(() => { fetchDocuments(); }, []);
 
   const resetForm = () => {
     form.reset();
@@ -104,6 +122,7 @@ export function CommunityMaterials() {
 
       resetForm();
       toast({ title: "Material uploaded", description: `"${data.title}" has been sent.` });
+      fetchDocuments();
     } catch (err) {
       toast({
         title: "Upload failed",
@@ -131,8 +150,8 @@ export function CommunityMaterials() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        {showAddForm ? (
+      <CardContent className="space-y-4">
+        {showAddForm && (
           <div className="rounded-lg border border-border p-4 bg-muted/30">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -237,7 +256,49 @@ export function CommunityMaterials() {
               </form>
             </Form>
           </div>
-        ) : (
+        )}
+
+        {loadingDocuments ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : documents.length > 0 ? (
+          <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
+            {documents.map((doc) => {
+              const config = materialTypeConfig[doc.type_id] ?? materialTypeConfig[materialTypeIds.document];
+              const Icon = config.icon;
+              const href = doc.link ?? doc.url;
+              return (
+                <div key={doc.id} className="flex items-start gap-3 p-3 hover:bg-muted/30 transition-colors">
+                  <span className={`inline-flex items-center justify-center rounded-md p-2 flex-shrink-0 ${config.color}`}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-sm truncate">{doc.title}</p>
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${config.color}`}>
+                        {config.label}
+                      </span>
+                    </div>
+                    {doc.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{doc.description}</p>
+                    )}
+                  </div>
+                  {href && (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : !showAddForm ? (
           <div className="text-center py-12">
             <BookOpen className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
             <p className="text-muted-foreground mt-4">No materials added yet</p>
@@ -247,7 +308,7 @@ export function CommunityMaterials() {
               Add Your First Material
             </Button>
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

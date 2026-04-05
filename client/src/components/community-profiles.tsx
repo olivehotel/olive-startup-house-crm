@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,9 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, UserCircle, X, Loader2 } from "lucide-react";
+import { Plus, UserCircle, X, Loader2, Linkedin, DoorOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { InsertProfile } from "@shared/schema";
+import type { InsertProfile, CommunityProfile } from "@shared/schema";
 import { insertProfileSchema } from "@shared/schema";
 import { FileDropZone } from "@/components/file-drop-zone";
 
@@ -18,11 +18,28 @@ export function CommunityProfiles() {
   const [showAddProfileForm, setShowAddProfileForm] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [profiles, setProfiles] = useState<CommunityProfile[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(true);
 
   const profileForm = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
     defaultValues: { name: "", position: "", description: "", room: "", linkedin_url: "" },
   });
+
+  const fetchProfiles = async () => {
+    setLoadingProfiles(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("get_community_profiles");
+      if (error) throw error;
+      setProfiles(data ?? []);
+    } catch {
+      // silently fail; empty state shown
+    } finally {
+      setLoadingProfiles(false);
+    }
+  };
+
+  useEffect(() => { fetchProfiles(); }, []);
 
   const resetProfileForm = () => {
     profileForm.reset();
@@ -46,7 +63,7 @@ export function CommunityProfiles() {
         throw new Error("Session expired — please log out and log in again.");
       }
 
-      const { error: fnError } = await supabase.functions.invoke("create-community-profile", {
+      const { error: fnError } = await supabase.functions.invoke("community_add_profile", {
         body,
         headers: { Authorization: `Bearer ${refreshData.session.access_token}` },
       });
@@ -54,6 +71,7 @@ export function CommunityProfiles() {
 
       resetProfileForm();
       toast({ title: "Profile created", description: `"${data.name}" has been added.` });
+      fetchProfiles();
     } catch (err) {
       toast({
         title: "Failed to create profile",
@@ -79,8 +97,8 @@ export function CommunityProfiles() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        {showAddProfileForm ? (
+      <CardContent className="space-y-4">
+        {showAddProfileForm && (
           <div className="rounded-lg border border-border p-4 bg-muted/30">
             <Form {...profileForm}>
               <form onSubmit={profileForm.handleSubmit(onSubmitProfile)} className="space-y-4">
@@ -181,7 +199,63 @@ export function CommunityProfiles() {
               </form>
             </Form>
           </div>
-        ) : (
+        )}
+
+        {loadingProfiles ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : profiles.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {profiles.map((profile) => (
+              <div
+                key={profile.id}
+                className="flex flex-col gap-3 rounded-lg border border-border p-4 bg-card hover:bg-muted/30 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  {profile.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt={profile.name}
+                      className="h-12 w-12 rounded-full object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <UserCircle className="h-12 w-12 text-muted-foreground flex-shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{profile.name}</p>
+                    <p className="text-sm text-muted-foreground truncate">{profile.position}</p>
+                  </div>
+                </div>
+
+                {profile.description && (
+                  <p className="text-sm text-muted-foreground line-clamp-2">{profile.description}</p>
+                )}
+
+                <div className="flex items-center gap-3 mt-auto flex-wrap">
+                  {profile.room && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <DoorOpen className="h-3.5 w-3.5" />
+                      {profile.room}
+                    </span>
+                  )}
+                  {profile.linkedin_url && (
+                    <a
+                      href={profile.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Linkedin className="h-3.5 w-3.5" />
+                      LinkedIn
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !showAddProfileForm ? (
           <div className="text-center py-12">
             <UserCircle className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
             <p className="text-muted-foreground mt-4">No profiles added yet</p>
@@ -191,7 +265,7 @@ export function CommunityProfiles() {
               Add Your First Profile
             </Button>
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

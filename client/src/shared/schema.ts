@@ -353,6 +353,17 @@ export const insertMaterialSchema = z.object({
 
 export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
 
+// Community Document
+export interface CommunityDocument {
+  id: string;
+  title: string;
+  description?: string;
+  type_id: MaterialTypeId;
+  url?: string;
+  link?: string;
+  created_at?: string;
+}
+
 // Community Profile
 export interface CommunityProfile {
   id: string;
