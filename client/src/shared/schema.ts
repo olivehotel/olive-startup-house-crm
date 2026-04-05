@@ -324,6 +324,31 @@ export interface CommunicationStats {
   toursScheduled: number;
 }
 
+// Community Material Types (UUID → value)
+export const materialTypes = {
+  "113d2721-9243-4bff-9b8a-145a878456d4": "document",
+  "72c083ba-6501-4f81-996b-6c488f5db458": "slide",
+  "80a1eece-e2ed-45a4-95e3-f431e56f8678": "tip",
+  "a1a8348c-69cd-4b9f-9a9f-56da587fcc78": "video",
+  "f29c05ef-25ea-4a12-96e8-e9a4aa54b637": "guide",
+  "f7653665-11dc-4044-a3db-75b0e24398b1": "rule",
+  "b6a97d5b-20a5-4cfb-969b-c626e10e2f6d": "link",
+} as const;
+
+export type MaterialTypeId = keyof typeof materialTypes;
+export type MaterialTypeValue = typeof materialTypes[MaterialTypeId];
+
+const materialTypeIds = Object.keys(materialTypes) as [MaterialTypeId, ...MaterialTypeId[]];
+
+export const insertMaterialSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  type: z.enum(materialTypeIds),
+  url: z.union([z.string().url(), z.literal("")]).optional(),
+});
+
+export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
+
 // Community Stats
 export interface CommunityStats {
   activeMembers: number;

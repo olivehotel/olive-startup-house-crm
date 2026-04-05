@@ -24,10 +24,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     const loadSession = async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
       if (!isMounted) return;
-      setUserEmail(data.session?.user.email ?? null);
-      setUserName(data.session?.user.user_metadata?.full_name ?? null);
+
+      if (error || !data.session) {
+        await supabase.auth.signOut({ scope: "local" });
+        setUserEmail(null);
+        setUserName(null);
+        setIsAuthLoading(false);
+        return;
+      }
+
+      setUserEmail(data.session.user.email ?? null);
+      setUserName(data.session.user.user_metadata?.full_name ?? null);
       setIsAuthLoading(false);
     };
 

@@ -1,34 +1,168 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { EventCard } from "@/components/event-card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
 import {
-  Users,
-  MessageSquare,
-  Calendar,
   Plus,
-  TrendingUp,
-  Settings,
-  ExternalLink,
-  Send,
+  BookOpen,
+  BookMarked,
+  Presentation,
+  Lightbulb,
+  FileText,
+  X,
+  Upload,
+  Loader2,
+  File,
+  Video,
+  Link2,
 } from "lucide-react";
-import { SiWhatsapp, SiTelegram } from "react-icons/si";
-import type { CommunityEvent, CommunityStats } from "@shared/schema";
+import { supabase } from "@/lib/supabase";
+import type { InsertMaterial, MaterialTypeId } from "@shared/schema";
+import { insertMaterialSchema, materialTypes } from "@shared/schema";
+
+const LINK_TYPE_ID: MaterialTypeId = "b6a97d5b-20a5-4cfb-969b-c626e10e2f6d";
+const DOCUMENT_TYPE_ID: MaterialTypeId = "113d2721-9243-4bff-9b8a-145a878456d4";
+
+const materialTypeConfig: Record<MaterialTypeId, { label: string; icon: React.ElementType; color: string }> = {
+  "113d2721-9243-4bff-9b8a-145a878456d4": { label: "Document", icon: FileText,    color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+  "72c083ba-6501-4f81-996b-6c488f5db458": { label: "Slide",    icon: Presentation, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  "80a1eece-e2ed-45a4-95e3-f431e56f8678": { label: "Tip",      icon: Lightbulb,    color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+  "a1a8348c-69cd-4b9f-9a9f-56da587fcc78": { label: "Video",    icon: Video,        color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+  "f29c05ef-25ea-4a12-96e8-e9a4aa54b637": { label: "Guide",    icon: BookMarked,   color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  "f7653665-11dc-4044-a3db-75b0e24398b1": { label: "Rule",     icon: BookOpen,     color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  "b6a97d5b-20a5-4cfb-969b-c626e10e2f6d": { label: "Link",     icon: Link2,        color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400" },
+};
+
+const acceptByType: Record<MaterialTypeId, string> = {
+  "113d2721-9243-4bff-9b8a-145a878456d4": ".pdf,.doc,.docx,.xls,.xlsx,.xml",
+  "72c083ba-6501-4f81-996b-6c488f5db458": ".jpg,.jpeg,.png,.webp,.gif,.ppt,.pptx",
+  "80a1eece-e2ed-45a4-95e3-f431e56f8678": ".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx",
+  "a1a8348c-69cd-4b9f-9a9f-56da587fcc78": ".mp4,.webm,.mov,.avi",
+  "f29c05ef-25ea-4a12-96e8-e9a4aa54b637": ".pdf,.doc,.docx",
+  "f7653665-11dc-4044-a3db-75b0e24398b1": ".pdf,.doc,.docx,.xls,.xlsx,.xml",
+  "b6a97d5b-20a5-4cfb-969b-c626e10e2f6d": "",
+};
+
+function FileDropZone({
+  accept,
+  label,
+  file,
+  onChange,
+}: {
+  accept: string;
+  label: string;
+  file: File | null;
+  onChange: (f: File | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div
+      className="border-2 border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:bg-muted/30 transition-colors"
+      onClick={() => inputRef.current?.click()}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+      />
+      {file ? (
+        <div className="flex items-center justify-center gap-2 text-sm">
+          <File className="h-4 w-4 text-primary" />
+          <span className="font-medium truncate max-w-[200px]">{file.name}</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onChange(null); }}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-1 text-muted-foreground">
+          <Upload className="h-5 w-5" />
+          <p className="text-sm">{label}</p>
+          <p className="text-xs">{accept.replaceAll(",", " ")}</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CommunityPage() {
-  const { data: events, isLoading: eventsLoading } = useQuery<CommunityEvent[]>({
-    queryKey: ["/api/events"],
+  const { toast } = useToast();
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [mainFile, setMainFile] = useState<File | null>(null);
+
+  const form = useForm<InsertMaterial>({
+    resolver: zodResolver(insertMaterialSchema),
+    defaultValues: { title: "", description: "", type: DOCUMENT_TYPE_ID, url: "" },
   });
 
-  const { data: stats } = useQuery<CommunityStats>({
-    queryKey: ["/api/community/stats"],
-  });
+  const selectedType = form.watch("type") as MaterialTypeId;
+  const isLinkType = selectedType === LINK_TYPE_ID;
 
-  const upcomingEvents = events?.filter(e => new Date(e.date) >= new Date()) || [];
-  const pastEvents = events?.filter(e => new Date(e.date) < new Date()) || [];
+  const resetForm = () => {
+    form.reset();
+    setMainFile(null);
+    setShowAddForm(false);
+  };
+
+  const onSubmit = async (data: InsertMaterial) => {
+    console.log(data, "data");
+    if (!isLinkType && !mainFile) {
+      toast({ title: "Please select a file", variant: "destructive" });
+      return;
+    }
+    if (isLinkType && !data.url) {
+      toast({ title: "Please enter a URL", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("type_id", data.type);
+      body.append("title", data.title);
+      if (data.description) body.append("description", data.description);
+
+      if (isLinkType) {
+        body.append("link", data.url!);
+      } else {
+        body.append("file", mainFile!);
+      }
+
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session?.access_token) {
+        throw new Error("Session expired — please log out and log in again.");
+      }
+
+      const { error: fnError } = await supabase.functions.invoke("load_community_document", {
+        body,
+        headers: { Authorization: `Bearer ${refreshData.session.access_token}` },
+      });
+      if (fnError) throw fnError;
+
+      resetForm();
+      toast({ title: "Material uploaded", description: `"${data.title}" has been sent.` });
+    } catch (err) {
+      toast({
+        title: "Upload failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
@@ -38,259 +172,141 @@ export default function CommunityPage() {
           <h1 className="text-2xl font-bold">Community Hub</h1>
           <p className="text-muted-foreground">Co-living & co-working engagement and post-sale CRM</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <Settings className="h-4 w-4 mr-2" />
-            Settings
-          </Button>
-          <Button data-testid="button-create-event">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Event
-          </Button>
-        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-md bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                {stats?.membersChange || 0}%
-              </Badge>
-            </div>
-            <p className="text-2xl font-bold mt-3">{stats?.activeMembers || 0}</p>
-            <p className="text-sm text-muted-foreground">Active Members</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-md bg-emerald-100 dark:bg-emerald-900/30">
-                <SiWhatsapp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                {stats?.engagementChange || 0}%
-              </Badge>
-            </div>
-            <p className="text-2xl font-bold mt-3">{stats?.whatsappEngagement || 0}%</p>
-            <p className="text-sm text-muted-foreground">WhatsApp Engagement</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
-                <SiTelegram className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                {stats?.groupsChange || 0}%
-              </Badge>
-            </div>
-            <p className="text-2xl font-bold mt-3">{stats?.telegramGroups || 0}</p>
-            <p className="text-sm text-muted-foreground">Telegram Groups</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-md bg-amber-100 dark:bg-amber-900/30">
-                <Calendar className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              </div>
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                {stats?.eventsChange || 0}%
-              </Badge>
-            </div>
-            <p className="text-2xl font-bold mt-3">{stats?.monthlyEvents || 0}</p>
-            <p className="text-sm text-muted-foreground">Monthly Events</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Messaging Platforms */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-md bg-emerald-100 dark:bg-emerald-900/30">
-                <SiWhatsapp className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-lg">WhatsApp Integration</h3>
-                <p className="text-sm text-muted-foreground">Connected to community groups</p>
-              </div>
-              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
-                Active
-              </Badge>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-              <div className="p-2 rounded-md bg-muted/50">
-                <p className="text-lg font-bold">4</p>
-                <p className="text-xs text-muted-foreground">Groups</p>
-              </div>
-              <div className="p-2 rounded-md bg-muted/50">
-                <p className="text-lg font-bold">187</p>
-                <p className="text-xs text-muted-foreground">Members</p>
-              </div>
-              <div className="p-2 rounded-md bg-muted/50">
-                <p className="text-lg font-bold">{stats?.whatsappEngagement || 0}%</p>
-                <p className="text-xs text-muted-foreground">Engagement</p>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button variant="outline" className="flex-1">
-                <Send className="h-4 w-4 mr-2" />
-                Broadcast
-              </Button>
-              <Button variant="outline">
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-md bg-blue-100 dark:bg-blue-900/30">
-                <SiTelegram className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-lg">Telegram Integration</h3>
-                <p className="text-sm text-muted-foreground">Property-specific channels</p>
-              </div>
-              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
-                Active
-              </Badge>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-              <div className="p-2 rounded-md bg-muted/50">
-                <p className="text-lg font-bold">{stats?.telegramGroups || 0}</p>
-                <p className="text-xs text-muted-foreground">Groups</p>
-              </div>
-              <div className="p-2 rounded-md bg-muted/50">
-                <p className="text-lg font-bold">156</p>
-                <p className="text-xs text-muted-foreground">Subscribers</p>
-              </div>
-              <div className="p-2 rounded-md bg-muted/50">
-                <p className="text-lg font-bold">89%</p>
-                <p className="text-xs text-muted-foreground">Active</p>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button variant="outline" className="flex-1">
-                <Send className="h-4 w-4 mr-2" />
-                Announce
-              </Button>
-              <Button variant="outline">
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Events */}
+      {/* Community Materials */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Community Events</CardTitle>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Event
-            </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg">Community Materials</CardTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">Rules, slides, and tips for residents</p>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => setShowAddForm((v) => !v)}>
+                {showAddForm ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                {showAddForm ? "Cancel" : "Add Material"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="upcoming">
-            <TabsList>
-              <TabsTrigger value="upcoming">Upcoming ({upcomingEvents.length})</TabsTrigger>
-              <TabsTrigger value="past">Past Events ({pastEvents.length})</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="upcoming" className="mt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {eventsLoading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-36 w-full rounded-md" />
-                  ))
-                ) : upcomingEvents.length === 0 ? (
-                  <div className="col-span-4 text-center py-12">
-                    <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground mt-4">No upcoming events</p>
-                    <Button className="mt-4">Create Your First Event</Button>
+          {showAddForm ? (
+            <div className="rounded-lg border border-border p-4 bg-muted/30">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Title</FormLabel>
+                          <FormControl>
+                            <Input placeholder="House Rules 2024" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Type</FormLabel>
+                          <Select
+                            onValueChange={(v) => { field.onChange(v); setMainFile(null); }}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {(Object.keys(materialTypes) as MaterialTypeId[]).map((id) => (
+                                <SelectItem key={id} value={id}>
+                                  {materialTypeConfig[id].label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
-                ) : (
-                  upcomingEvents.map((event) => (
-                    <EventCard key={event.id} event={event} />
-                  ))
-                )}
-              </div>
-            </TabsContent>
 
-            <TabsContent value="past" className="mt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {pastEvents.length === 0 ? (
-                  <div className="col-span-4 text-center py-12">
-                    <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground mt-4">No past events</p>
+                  {isLinkType ? (
+                    <FormField
+                      control={form.control}
+                      name="url"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>URL</FormLabel>
+                          <FormControl>
+                            <Input placeholder="https://example.com/resource" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium mb-2">File</p>
+                      <FileDropZone
+                        accept={acceptByType[selectedType]}
+                        label={`Upload ${materialTypeConfig[selectedType].label.toLowerCase()} file`}
+                        file={mainFile}
+                        onChange={setMainFile}
+                      />
+                    </div>
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description <span className="text-muted-foreground">(optional)</span></FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Brief description visible to residents..." rows={2} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={resetForm} disabled={uploading}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={uploading}>
+                      {uploading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading…
+                        </>
+                      ) : (
+                        "Send Material"
+                      )}
+                    </Button>
                   </div>
-                ) : (
-                  pastEvents.map((event) => (
-                    <EventCard key={event.id} event={event} />
-                  ))
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* CRM Section */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Post-Sale Engagement CRM</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-md border border-border">
-              <h4 className="font-medium">Satisfaction Surveys</h4>
-              <p className="text-sm text-muted-foreground mt-1">Automated feedback collection</p>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-2xl font-bold">4.7</span>
-                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
-                  Avg Rating
-                </Badge>
-              </div>
+                </form>
+              </Form>
             </div>
-            <div className="p-4 rounded-md border border-border">
-              <h4 className="font-medium">Renewal Tracking</h4>
-              <p className="text-sm text-muted-foreground mt-1">Lease renewal automation</p>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-2xl font-bold">92%</span>
-                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
-                  Retention
-                </Badge>
-              </div>
+          ) : (
+            <div className="text-center py-12">
+              <BookOpen className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+              <p className="text-muted-foreground mt-4">No materials added yet</p>
+              <p className="text-sm text-muted-foreground">Upload documents, slides, or tips for your residents.</p>
+              <Button className="mt-4" onClick={() => setShowAddForm(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Your First Material
+              </Button>
             </div>
-            <div className="p-4 rounded-md border border-border">
-              <h4 className="font-medium">Referral Program</h4>
-              <p className="text-sm text-muted-foreground mt-1">Member referral incentives</p>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-2xl font-bold">24</span>
-                <Badge className="bg-primary/10 text-primary border-0">
-                  This Month
-                </Badge>
-              </div>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
