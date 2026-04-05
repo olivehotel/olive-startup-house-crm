@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,11 +20,38 @@ import {
   Video,
   Link2,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { InsertMaterial, MaterialTypeId, CommunityDocument } from "@shared/schema";
+import type {
+  InsertMaterial,
+  MaterialTypeId,
+  MaterialTypeValue,
+  CommunityDocument,
+  CommunityDocumentsPagination,
+} from "@shared/schema";
 import { insertMaterialSchema, materialTypes, materialTypeIds } from "@shared/schema";
 import { FileDropZone } from "@/components/file-drop-zone";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { getCommunityDocuments, editCommunityDocument, deleteCommunityDocument } from "@/actions/community";
 
 const LINK_TYPE_ID: MaterialTypeId = materialTypeIds.link;
 const DOCUMENT_TYPE_ID: MaterialTypeId = materialTypeIds.document;
@@ -49,13 +76,120 @@ const acceptByType: Record<MaterialTypeId, string> = {
   [materialTypeIds.link]:     "",
 };
 
+function materialRowConfig(doc: CommunityDocument) {
+  if (doc.type_id && materialTypeConfig[doc.type_id]) {
+    return materialTypeConfig[doc.type_id];
+  }
+  const v = doc.type?.value;
+  if (v && v in materialTypeIds) {
+    return materialTypeConfig[materialTypeIds[v as MaterialTypeValue]];
+  }
+  return materialTypeConfig[materialTypeIds.document];
+}
+
+function isLinkDocument(doc: CommunityDocument): boolean {
+  return doc.type?.value === "link" || doc.type_id === materialTypeIds.link;
+}
+
+function materialTypeIdForDoc(doc: CommunityDocument): MaterialTypeId {
+  if (doc.type_id && materialTypeConfig[doc.type_id]) return doc.type_id;
+  const v = doc.type?.value;
+  if (v && v in materialTypeIds) return materialTypeIds[v as MaterialTypeValue];
+  return materialTypeIds.document;
+}
+
+const COMMUNITY_DOCUMENTS_BUCKET = "community-documents";
+
+/**
+ * Reduces API values to the object key inside the bucket (no domain, no /storage/v1/ prefix).
+ */
+function normalizeCommunityDocumentStoragePath(raw: string, bucket: string): string {
+  let s = raw.trim();
+  if (!s) return "";
+
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      s = u.pathname.replace(/^\/+/, "");
+    } catch {
+      return "";
+    }
+  } else {
+    s = s.replace(/^\/+/, "");
+  }
+
+  const storagePrefixes = [
+    `storage/v1/object/public/${bucket}/`,
+    `storage/v1/object/sign/${bucket}/`,
+    `storage/v1/object/authenticated/${bucket}/`,
+    `storage/v1/object/${bucket}/`,
+  ];
+  for (const prefix of storagePrefixes) {
+    if (s.startsWith(prefix)) {
+      s = s.slice(prefix.length);
+      break;
+    }
+  }
+
+  if (s.startsWith(`${bucket}/`)) {
+    s = s.slice(bucket.length + 1);
+  }
+
+  return s.replace(/^\/+/, "");
+}
+
+function suggestedDownloadFileName(filePath: string, title: string): string {
+  const segments = filePath.split("/").filter(Boolean);
+  const last = segments[segments.length - 1] ?? "";
+  if (last.includes(".")) return last;
+  const extMatch = filePath.match(/(\.[a-zA-Z0-9]{1,12})$/);
+  const base = title.replace(/[/\\?%*:|"<>]/g, "-").trim() || "download";
+  return extMatch ? `${base}${extMatch[1]}` : base;
+}
+
+async function downloadCommunityDocumentFromStorage(
+  rawPath: string,
+  title: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const key = normalizeCommunityDocumentStoragePath(rawPath, COMMUNITY_DOCUMENTS_BUCKET);
+  if (!key) {
+    return { ok: false, message: "Invalid file path" };
+  }
+  const fileName = suggestedDownloadFileName(key, title);
+  const { data, error } = await supabase.storage.from(COMMUNITY_DOCUMENTS_BUCKET).download(key);
+  if (error || !data) {
+    return { ok: false, message: error?.message ?? "Download failed" };
+  }
+  const url = URL.createObjectURL(data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+  return { ok: true };
+}
+
 export function CommunityMaterials() {
   const { toast } = useToast();
   const [showAddForm, setShowAddForm] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mainFile, setMainFile] = useState<File | null>(null);
   const [documents, setDocuments] = useState<CommunityDocument[]>([]);
+  const [pagination, setPagination] = useState<CommunityDocumentsPagination | null>(null);
+  const [page, setPage] = useState(1);
   const [loadingDocuments, setLoadingDocuments] = useState(true);
+
+  const [editingDoc, setEditingDoc] = useState<CommunityDocument | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editLink, setEditLink] = useState("");
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [deletingDoc, setDeletingDoc] = useState<CommunityDocument | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const form = useForm<InsertMaterial>({
     resolver: zodResolver(insertMaterialSchema),
@@ -65,20 +199,22 @@ export function CommunityMaterials() {
   const selectedType = form.watch("type") as MaterialTypeId;
   const isLinkType = selectedType === LINK_TYPE_ID;
 
-  const fetchDocuments = async () => {
+  const loadPage = useCallback(async (p: number) => {
     setLoadingDocuments(true);
     try {
-      const { data, error } = await supabase.functions.invoke("get_community_documents");
-      if (error) throw error;
-      setDocuments(data?.documents ?? []);
+      const { documents: docs, pagination: pag } = await getCommunityDocuments(p);
+      setDocuments(docs ?? []);
+      setPagination(pag);
     } catch {
-      // silently fail; empty state shown
+      setPagination(null);
     } finally {
       setLoadingDocuments(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchDocuments(); }, []);
+  useEffect(() => {
+    void loadPage(page);
+  }, [page, loadPage]);
 
   const resetForm = () => {
     form.reset();
@@ -122,7 +258,11 @@ export function CommunityMaterials() {
 
       resetForm();
       toast({ title: "Material uploaded", description: `"${data.title}" has been sent.` });
-      fetchDocuments();
+      if (page === 1) {
+        await loadPage(1);
+      } else {
+        setPage(1);
+      }
     } catch (err) {
       toast({
         title: "Upload failed",
@@ -134,7 +274,100 @@ export function CommunityMaterials() {
     }
   };
 
+  const openEdit = (doc: CommunityDocument) => {
+    setEditingDoc(doc);
+    setEditTitle(doc.title);
+    setEditDescription(doc.description ?? "");
+    setEditLink((doc.link ?? doc.url) ?? "");
+    setEditFile(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingDoc) return;
+    if (!editTitle.trim()) {
+      toast({ title: "Title is required", variant: "destructive" });
+      return;
+    }
+    if (isLinkDocument(editingDoc)) {
+      const link = editLink.trim();
+      if (!link) {
+        toast({ title: "Please enter a URL", variant: "destructive" });
+        return;
+      }
+      let urlOk = false;
+      try {
+        const u = new URL(link);
+        urlOk = u.protocol === "http:" || u.protocol === "https:";
+      } catch {
+        urlOk = false;
+      }
+      if (!urlOk) {
+        toast({ title: "Please enter a valid URL", variant: "destructive" });
+        return;
+      }
+    }
+
+    setSavingEdit(true);
+    try {
+      const fd = new FormData();
+      fd.append("document_id", editingDoc.id);
+      fd.append("title", editTitle.trim());
+      if (editDescription.trim()) fd.append("description", editDescription.trim());
+      if (isLinkDocument(editingDoc)) {
+        fd.append("link", editLink.trim());
+      } else if (editFile) {
+        fd.append("file", editFile);
+      }
+      await editCommunityDocument(fd);
+      toast({ title: "Material updated", description: `"${editTitle.trim()}" has been saved.` });
+      setEditingDoc(null);
+      setEditFile(null);
+      await loadPage(page);
+    } catch (err) {
+      toast({
+        title: "Update failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingDoc) return;
+    setDeleting(true);
+    try {
+      await deleteCommunityDocument(deletingDoc.id);
+      toast({ title: "Material deleted", description: `"${deletingDoc.title}" has been removed.` });
+      setDeletingDoc(null);
+      await loadPage(page);
+    } catch (err) {
+      toast({
+        title: "Delete failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDownloadMaterial = async (doc: CommunityDocument) => {
+    if (!doc.file_path) return;
+    setDownloadingId(doc.id);
+    try {
+      const result = await downloadCommunityDocumentFromStorage(doc.file_path, doc.title);
+      if (!result.ok) {
+        toast({ title: "Download failed", description: result.message, variant: "destructive" });
+      }
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
+    <>
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -265,15 +498,47 @@ export function CommunityMaterials() {
         ) : documents.length > 0 ? (
           <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
             {documents.map((doc) => {
-              const config = materialTypeConfig[doc.type_id] ?? materialTypeConfig[materialTypeIds.document];
+              const config = materialRowConfig(doc);
               const Icon = config.icon;
               const href = doc.link ?? doc.url;
+              const canDownloadFromStorage = !isLinkDocument(doc) && !!doc.file_path;
+              const showExternalLink = !!href && (isLinkDocument(doc) || !doc.file_path);
+              const isDownloading = downloadingId === doc.id;
               return (
                 <div key={doc.id} className="flex items-start gap-3 p-3 hover:bg-muted/30 transition-colors">
                   <span className={`inline-flex items-center justify-center rounded-md p-2 flex-shrink-0 ${config.color}`}>
-                    <Icon className="h-4 w-4" />
+                    {isDownloading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Icon className="h-4 w-4" />
+                    )}
                   </span>
-                  <div className="min-w-0 flex-1">
+                  <div
+                    className={
+                      canDownloadFromStorage
+                        ? "min-w-0 flex-1 text-left cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        : "min-w-0 flex-1"
+                    }
+                    role={canDownloadFromStorage ? "button" : undefined}
+                    tabIndex={canDownloadFromStorage ? 0 : undefined}
+                    aria-busy={canDownloadFromStorage ? isDownloading : undefined}
+                    aria-label={canDownloadFromStorage ? `Download ${doc.title}` : undefined}
+                    onClick={
+                      canDownloadFromStorage && !isDownloading
+                        ? () => void handleDownloadMaterial(doc)
+                        : undefined
+                    }
+                    onKeyDown={
+                      canDownloadFromStorage && !isDownloading
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              void handleDownloadMaterial(doc);
+                            }
+                          }
+                        : undefined
+                    }
+                  >
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-sm truncate">{doc.title}</p>
                       <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${config.color}`}>
@@ -284,19 +549,71 @@ export function CommunityMaterials() {
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{doc.description}</p>
                     )}
                   </div>
-                  {href && (
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label="Edit material"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEdit(doc);
+                      }}
                     >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  )}
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      aria-label="Delete material"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingDoc(doc);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    {showExternalLink && href && (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-primary transition-colors p-2"
+                        aria-label="Open link"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               );
             })}
+            {pagination && pagination.total_pages > 1 && (
+              <div className="flex items-center justify-center gap-3 pt-2 border-t border-border">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={!pagination.has_prev}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {pagination.page} of {pagination.total_pages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={!pagination.has_next}
+                >
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            )}
           </div>
         ) : !showAddForm ? (
           <div className="text-center py-12">
@@ -311,5 +628,96 @@ export function CommunityMaterials() {
         ) : null}
       </CardContent>
     </Card>
+
+    <Dialog
+      open={editingDoc !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          setEditingDoc(null);
+          setEditFile(null);
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit material</DialogTitle>
+        </DialogHeader>
+        {editingDoc && (
+          <div className="space-y-4 py-1">
+            <div>
+              <p className="text-sm font-medium mb-1.5">Title</p>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" />
+            </div>
+            {isLinkDocument(editingDoc) ? (
+              <div>
+                <p className="text-sm font-medium mb-1.5">URL</p>
+                <Input value={editLink} onChange={(e) => setEditLink(e.target.value)} placeholder="https://…" />
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-medium mb-2">Replace file <span className="text-muted-foreground font-normal">(optional)</span></p>
+                <FileDropZone
+                  accept={acceptByType[materialTypeIdForDoc(editingDoc)]}
+                  label={`New ${materialTypeConfig[materialTypeIdForDoc(editingDoc)].label.toLowerCase()} file`}
+                  file={editFile}
+                  onChange={setEditFile}
+                />
+              </div>
+            )}
+            <div>
+              <p className="text-sm font-medium mb-1.5">Description <span className="text-muted-foreground font-normal">(optional)</span></p>
+              <Textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Brief description…"
+                rows={2}
+              />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => { setEditingDoc(null); setEditFile(null); }} disabled={savingEdit}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => void saveEdit()} disabled={savingEdit}>
+            {savingEdit ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save changes"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <AlertDialog open={deletingDoc !== null} onOpenChange={(open) => { if (!open) setDeletingDoc(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this material?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {deletingDoc ? (
+              <>This will remove &quot;{deletingDoc.title}&quot; from community materials. This cannot be undone.</>
+            ) : null}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+          <Button variant="destructive" onClick={() => void confirmDelete()} disabled={deleting}>
+            {deleting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Deleting…
+              </>
+            ) : (
+              "Delete"
+            )}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

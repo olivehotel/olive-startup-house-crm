@@ -353,14 +353,32 @@ export const insertMaterialSchema = z.object({
 
 export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
 
+/** Pagination metadata from get_community_documents edge function */
+export interface CommunityDocumentsPagination {
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+/** Pagination metadata from get_community_profiles edge function (same shape as documents) */
+export type CommunityProfilesPagination = CommunityDocumentsPagination;
+
 // Community Document
 export interface CommunityDocument {
   id: string;
   title: string;
-  description?: string;
-  type_id: MaterialTypeId;
+  description?: string | null;
+  /** Present when API returns flat type id */
+  type_id?: MaterialTypeId;
+  /** Present when API returns nested type (e.g. type.value for icons) */
+  type?: { id: string; value: MaterialTypeValue };
   url?: string;
-  link?: string;
+  link?: string | null;
+  /** Storage object key in bucket `community-documents` (non-link materials) */
+  file_path?: string | null;
   created_at?: string;
 }
 

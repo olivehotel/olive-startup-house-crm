@@ -23,17 +23,23 @@ export async function apiFetch<T>(
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
   }
 
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+
   const res = await fetch(url.toString(), {
     method,
     headers: {
-      "Content-Type": "application/json",
+      ...(!isFormData ? { "Content-Type": "application/json" } : {}),
       ...(session?.access_token
         ? { Authorization: `Bearer ${session.access_token}` }
         : {}),
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(body !== undefined
+      ? { body: isFormData ? (body as FormData) : JSON.stringify(body) }
+      : {}),
   });
 
-  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-  return res.json();
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${res.status}: ${text}`);
+  if (!text.trim()) return {} as T;
+  return JSON.parse(text) as T;
 }
