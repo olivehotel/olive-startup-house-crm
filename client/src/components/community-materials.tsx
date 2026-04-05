@@ -26,6 +26,10 @@ import {
   Trash2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import {
+  COMMUNITY_DOCUMENTS_BUCKET,
+  downloadCommunityDocumentFromStorage,
+} from "@/lib/community-document-storage";
 import type {
   InsertMaterial,
   MaterialTypeId,
@@ -96,77 +100,6 @@ function materialTypeIdForDoc(doc: CommunityDocument): MaterialTypeId {
   const v = doc.type?.value;
   if (v && v in materialTypeIds) return materialTypeIds[v as MaterialTypeValue];
   return materialTypeIds.document;
-}
-
-const COMMUNITY_DOCUMENTS_BUCKET = "community-documents";
-
-/**
- * Reduces API values to the object key inside the bucket (no domain, no /storage/v1/ prefix).
- */
-function normalizeCommunityDocumentStoragePath(raw: string, bucket: string): string {
-  let s = raw.trim();
-  if (!s) return "";
-
-  if (/^https?:\/\//i.test(s)) {
-    try {
-      const u = new URL(s);
-      s = u.pathname.replace(/^\/+/, "");
-    } catch {
-      return "";
-    }
-  } else {
-    s = s.replace(/^\/+/, "");
-  }
-
-  const storagePrefixes = [
-    `storage/v1/object/public/${bucket}/`,
-    `storage/v1/object/sign/${bucket}/`,
-    `storage/v1/object/authenticated/${bucket}/`,
-    `storage/v1/object/${bucket}/`,
-  ];
-  for (const prefix of storagePrefixes) {
-    if (s.startsWith(prefix)) {
-      s = s.slice(prefix.length);
-      break;
-    }
-  }
-
-  if (s.startsWith(`${bucket}/`)) {
-    s = s.slice(bucket.length + 1);
-  }
-
-  return s.replace(/^\/+/, "");
-}
-
-function suggestedDownloadFileName(filePath: string, title: string): string {
-  const segments = filePath.split("/").filter(Boolean);
-  const last = segments[segments.length - 1] ?? "";
-  if (last.includes(".")) return last;
-  const extMatch = filePath.match(/(\.[a-zA-Z0-9]{1,12})$/);
-  const base = title.replace(/[/\\?%*:|"<>]/g, "-").trim() || "download";
-  return extMatch ? `${base}${extMatch[1]}` : base;
-}
-
-async function downloadCommunityDocumentFromStorage(
-  rawPath: string,
-  title: string,
-): Promise<{ ok: true } | { ok: false; message: string }> {
-  const key = normalizeCommunityDocumentStoragePath(rawPath, COMMUNITY_DOCUMENTS_BUCKET);
-  if (!key) {
-    return { ok: false, message: "Invalid file path" };
-  }
-  const fileName = suggestedDownloadFileName(key, title);
-  const { data, error } = await supabase.storage.from(COMMUNITY_DOCUMENTS_BUCKET).download(key);
-  if (error || !data) {
-    return { ok: false, message: error?.message ?? "Download failed" };
-  }
-  const url = URL.createObjectURL(data);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
-  return { ok: true };
 }
 
 export function CommunityMaterials() {
@@ -357,7 +290,12 @@ export function CommunityMaterials() {
     if (!doc.file_path) return;
     setDownloadingId(doc.id);
     try {
-      const result = await downloadCommunityDocumentFromStorage(doc.file_path, doc.title);
+      const result = await downloadCommunityDocumentFromStorage(
+        supabase,
+        COMMUNITY_DOCUMENTS_BUCKET,
+        doc.file_path,
+        doc.title,
+      );
       if (!result.ok) {
         toast({ title: "Download failed", description: result.message, variant: "destructive" });
       }
