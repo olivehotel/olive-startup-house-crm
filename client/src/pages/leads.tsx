@@ -3,9 +3,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { LeadCard } from "@/components/lead-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetchLeadsFromSupabase, LEADS_QUERY_KEY } from "@/lib/leads-supabase";
 import {
   Select,
   SelectContent,
@@ -13,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Filter, TrendingUp, Users, Target, CheckCircle } from "lucide-react";
+import { Plus, Search, Filter, TrendingUp, Users, Target, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import type { Lead } from "@shared/schema";
 
@@ -22,8 +24,10 @@ export default function LeadsPage() {
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [statusTab, setStatusTab] = useState("all");
 
-  const { data: leads, isLoading } = useQuery<Lead[]>({
-    queryKey: ["/api/leads"],
+  const { data: leads, isLoading, isError, error } = useQuery<Lead[]>({
+    queryKey: LEADS_QUERY_KEY,
+    queryFn: fetchLeadsFromSupabase,
+    staleTime: 60_000,
   });
 
   const filteredLeads = leads?.filter((lead) => {
@@ -58,6 +62,16 @@ export default function LeadsPage() {
           Add New Lead
         </Button>
       </div>
+
+      {isError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Could not load leads</AlertTitle>
+          <AlertDescription>
+            {error instanceof Error ? error.message : "Something went wrong"}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -178,6 +192,10 @@ export default function LeadsPage() {
                 Array.from({ length: 8 }).map((_, i) => (
                   <Skeleton key={i} className="h-16 w-full rounded-md" />
                 ))
+              ) : isError ? (
+                <div className="text-center py-12 text-muted-foreground text-sm">
+                  Fix the error above to see your pipeline.
+                </div>
               ) : filteredLeads?.length === 0 ? (
                 <div className="text-center py-12">
                   <Users className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />

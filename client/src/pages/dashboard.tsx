@@ -34,6 +34,7 @@ import {
   ArrowRight,
   DollarSign,
 } from "lucide-react";
+import { fetchLeadsFromSupabase, LEADS_QUERY_KEY } from "@/lib/leads-supabase";
 import type { 
   Lead, 
   Communication, 
@@ -54,7 +55,9 @@ export default function Dashboard() {
   });
 
   const { data: leads, isLoading: leadsLoading } = useQuery<Lead[]>({
-    queryKey: ["/api/leads"],
+    queryKey: LEADS_QUERY_KEY,
+    queryFn: fetchLeadsFromSupabase,
+    staleTime: 60_000,
   });
 
   const { data: communications, isLoading: commsLoading } = useQuery<Communication[]>({
