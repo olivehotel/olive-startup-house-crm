@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/api";
 import type {
   CommunityDocument,
+  CommunityDocumentAudience,
   CommunityDocumentsPagination,
   CommunityProfile,
   CommunityProfilesPagination,
@@ -37,7 +38,7 @@ export const editCommunityProfile = (form: FormData) =>
     body: form,
   });
 
-export const deleteCommunityDocument = (documentId: string, docType: CommunityDocumentType) =>
+export const deleteCommunityDocument = (documentId: string, docType: CommunityDocumentAudience) =>
   apiFetch<unknown>("community-delete-document", {
     method: "DELETE",
     body: { document_id: documentId, doc_type: docType },

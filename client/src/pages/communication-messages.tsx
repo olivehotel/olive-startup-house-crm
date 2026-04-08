@@ -5,8 +5,17 @@ import {
   getCommunicationMessages,
   sendEmailMessage,
 } from "@/actions/communications";
+import { getCommunityDocuments, getClientDocuments } from "@/actions/community";
 import { communicationChannels, communicationStatuses } from "@shared/schema";
-import type { CommunicationMessage } from "@shared/schema";
+import type {
+  CommunicationMessage,
+  CommunicationMessageAttachment,
+  CommunicationMessagesResponse,
+  CommunityDocument,
+  CommunityDocumentsPagination,
+} from "@shared/schema";
+import { supabase } from "@/lib/supabase";
+import { downloadCommunityDocumentFromStorage } from "@/lib/community-document-storage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,19 +38,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ArrowLeft,
   Calendar,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   Mail,
+  Paperclip,
   Phone,
   Send,
   Loader2,
   Video,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRef, useEffect, useMemo, useState } from "react";
+import { useRef, useEffect, useMemo, useState, useCallback } from "react";
 import DOMPurify from "dompurify";
 
 const statusColors: Record<string, string> = {
@@ -223,6 +239,120 @@ function HtmlEmailBody({ html, scopeId }: { html: string; scopeId: string }) {
   );
 }
 
+function DocumentPickerPagination({
+  pagination,
+  onPageChange,
+}: {
+  pagination: CommunityDocumentsPagination;
+  onPageChange: (page: number) => void;
+}) {
+  if (pagination.total_pages <= 1) return null;
+  return (
+    <div className="flex items-center justify-center gap-3 pt-2 border-t border-border shrink-0">
+      <Button
+        variant="outline"
+        size="sm"
+        type="button"
+        onClick={() => onPageChange(Math.max(1, pagination.page - 1))}
+        disabled={!pagination.has_prev}
+      >
+        <ChevronLeft className="h-4 w-4 mr-1" />
+      </Button>
+      <span className="text-sm text-muted-foreground">
+        Page {pagination.page} of {pagination.total_pages}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        type="button"
+        onClick={() => onPageChange(pagination.page + 1)}
+        disabled={!pagination.has_next}
+      >
+        <ChevronRight className="h-4 w-4 ml-1" />
+      </Button>
+    </div>
+  );
+}
+
+function MessageAttachmentChip({ att }: { att: CommunicationMessageAttachment }) {
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  const label = att.filename ?? att.title ?? "Attachment";
+  const canDownload = Boolean(att.bucket && att.file_path);
+
+  async function handleDownload() {
+    if (!canDownload || loading || !att.bucket || !att.file_path) return;
+    setLoading(true);
+    try {
+      const result = await downloadCommunityDocumentFromStorage(
+        supabase,
+        att.bucket,
+        att.file_path,
+        label,
+      );
+      if (!result.ok) {
+        toast({
+          title: "Download failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border bg-background/80 px-2 py-0.5 text-xs text-muted-foreground max-w-full">
+      <FileText className="h-3 w-3 shrink-0" />
+      {att.url ? (
+        <a
+          href={att.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="truncate max-w-[14rem] text-primary hover:underline"
+        >
+          {label}
+        </a>
+      ) : canDownload ? (
+        <button
+          type="button"
+          onClick={() => void handleDownload()}
+          disabled={loading}
+          className="truncate max-w-[14rem] text-left text-primary hover:underline disabled:opacity-60"
+        >
+          {loading ? (
+            <span className="inline-flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+              <span className="truncate">{label}</span>
+            </span>
+          ) : (
+            label
+          )}
+        </button>
+      ) : (
+        <span className="truncate max-w-[14rem]">{label}</span>
+      )}
+    </span>
+  );
+}
+
+function OutgoingAttachmentNames({
+  attachments,
+}: {
+  attachments: CommunicationMessageAttachment[];
+}) {
+  return (
+    <div className="flex flex-col items-end gap-0.5 text-xs text-muted-foreground max-w-full">
+      {attachments.map((att) => (
+        <span key={att.id} className="truncate max-w-[18rem] text-right">
+          {att.filename ?? att.title ?? "Attachment"}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function MessageBubble({ message }: { message: CommunicationMessage }) {
   const isOutgoing = message.direction === "outgoing";
 
@@ -267,6 +397,25 @@ function MessageBubble({ message }: { message: CommunicationMessage }) {
             {formatDate(message.received_at)}
           </span>
         </div>
+
+        {message.attachments && message.attachments.length > 0 && (
+          <>
+            {isOutgoing ? (
+              <OutgoingAttachmentNames attachments={message.attachments} />
+            ) : (
+              <div
+                className={cn(
+                  "flex flex-wrap gap-1.5 max-w-full",
+                  "justify-start",
+                )}
+              >
+                {message.attachments.map((att) => (
+                  <MessageAttachmentChip key={att.id} att={att} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         {message.body_html ? (
           <div
@@ -317,6 +466,34 @@ export default function CommunicationMessagesPage() {
   const [tourEnd, setTourEnd] = useState("");
   const [tourFormError, setTourFormError] = useState<string | null>(null);
 
+  const [documentsOpen, setDocumentsOpen] = useState(false);
+  const [documentPickerTab, setDocumentPickerTab] = useState("common");
+  const [pageCommon, setPageCommon] = useState(1);
+  const [pageClient, setPageClient] = useState(1);
+  const [documentsCommon, setDocumentsCommon] = useState<CommunityDocument[]>([]);
+  const [documentsClient, setDocumentsClient] = useState<CommunityDocument[]>([]);
+  const [paginationCommon, setPaginationCommon] =
+    useState<CommunityDocumentsPagination | null>(null);
+  const [paginationClient, setPaginationClient] =
+    useState<CommunityDocumentsPagination | null>(null);
+  const [loadingCommon, setLoadingCommon] = useState(false);
+  const [loadingClient, setLoadingClient] = useState(false);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [documentTitlesById, setDocumentTitlesById] = useState<Record<string, string>>(
+    {},
+  );
+
+  const documentSelectionRef = useRef<{
+    ids: string[];
+    titles: Record<string, string>;
+  }>({ ids: [], titles: {} });
+  useEffect(() => {
+    documentSelectionRef.current = {
+      ids: selectedDocumentIds,
+      titles: documentTitlesById,
+    };
+  }, [selectedDocumentIds, documentTitlesById]);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["communication-messages", communicationId],
     queryFn: () => getCommunicationMessages(communicationId),
@@ -357,14 +534,134 @@ export default function CommunicationMessagesPage() {
     ? communicationStatuses[comm.status_id]
     : undefined;
 
+  const loadCommonPage = useCallback(
+    async (p: number) => {
+      setLoadingCommon(true);
+      try {
+        const { documents: docs, pagination: pag } = await getCommunityDocuments(p);
+        const filtered = (docs ?? []).filter((d) => d.doc_type !== "client");
+        setDocumentsCommon(filtered);
+        setPaginationCommon(pag);
+      } catch (err) {
+        setPaginationCommon(null);
+        toast({
+          title: "Could not load common documents",
+          description: err instanceof Error ? err.message : "Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingCommon(false);
+      }
+    },
+    [toast],
+  );
+
+  const loadClientPage = useCallback(
+    async (p: number) => {
+      setLoadingClient(true);
+      try {
+        const { documents: docs, pagination: pag } = await getClientDocuments(p);
+        setDocumentsClient(docs ?? []);
+        setPaginationClient(pag);
+      } catch (err) {
+        setPaginationClient(null);
+        toast({
+          title: "Could not load client documents",
+          description: err instanceof Error ? err.message : "Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingClient(false);
+      }
+    },
+    [toast],
+  );
+
+  useEffect(() => {
+    if (!documentsOpen || documentPickerTab !== "common") return;
+    void loadCommonPage(pageCommon);
+  }, [documentsOpen, documentPickerTab, pageCommon, loadCommonPage]);
+
+  useEffect(() => {
+    if (!documentsOpen || documentPickerTab !== "client") return;
+    void loadClientPage(pageClient);
+  }, [documentsOpen, documentPickerTab, pageClient, loadClientPage]);
+
+  function openDocumentsPicker() {
+    setDocumentPickerTab("common");
+    setPageCommon(1);
+    setPageClient(1);
+    setDocumentsOpen(true);
+  }
+
+  function toggleDocumentSelection(id: string, title: string, checked: boolean) {
+    setSelectedDocumentIds((prev) =>
+      checked ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((x) => x !== id),
+    );
+    setDocumentTitlesById((prev) => {
+      if (checked) return { ...prev, [id]: title };
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function removeDocumentChip(id: string) {
+    toggleDocumentSelection(id, documentTitlesById[id] ?? "", false);
+  }
+
+  type SendEmailMutationContext = {
+    sentBody: string;
+    sentSubject: string;
+    attachmentSnapshot: CommunicationMessageAttachment[];
+  };
+
   const mutation = useMutation({
     mutationFn: sendEmailMessage,
-    onSuccess: () => {
-      setBody("");
-      setSendError(null);
-      queryClient.invalidateQueries({
+    onMutate: (variables): SendEmailMutationContext => {
+      const { ids, titles } = documentSelectionRef.current;
+      const attachmentSnapshot: CommunicationMessageAttachment[] = ids.map((id) => ({
+        id,
+        filename: titles[id] ?? "Document",
+      }));
+      return {
+        sentBody: variables.body,
+        sentSubject: variables.subject,
+        attachmentSnapshot,
+      };
+    },
+    onSuccess: async (_data, _variables, context) => {
+      if (!communicationId) return;
+      await queryClient.refetchQueries({
         queryKey: ["communication-messages", communicationId],
       });
+      if (context?.attachmentSnapshot?.length) {
+        queryClient.setQueryData<CommunicationMessagesResponse | undefined>(
+          ["communication-messages", communicationId],
+          (old) => {
+            if (!old) return old;
+            const messages = [...old.messages];
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const m = messages[i];
+              if (
+                m.direction === "outgoing" &&
+                m.body_text?.trim() === context.sentBody.trim() &&
+                m.subject === context.sentSubject
+              ) {
+                if (!m.attachments?.length) {
+                  messages[i] = { ...m, attachments: context.attachmentSnapshot };
+                }
+                break;
+              }
+            }
+            return { ...old, messages };
+          },
+        );
+      }
+      setBody("");
+      setSendError(null);
+      setSelectedDocumentIds([]);
+      setDocumentTitlesById({});
     },
     onError: (err: Error) => {
       setSendError(err.message ?? "Failed to send message.");
@@ -436,11 +733,20 @@ export default function CommunicationMessagesPage() {
     const trimmedSubject = subject.trim();
     if (!trimmedBody || !trimmedSubject || !communicationId) return;
     setSendError(null);
-    mutation.mutate({
+    const payload: {
+      communication_id: string;
+      body: string;
+      subject: string;
+      document_ids?: string[];
+    } = {
       communication_id: communicationId,
       body: trimmedBody,
       subject: trimmedSubject,
-    });
+    };
+    if (selectedDocumentIds.length > 0) {
+      payload.document_ids = selectedDocumentIds;
+    }
+    mutation.mutate(payload);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -542,14 +848,14 @@ export default function CommunicationMessagesPage() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
-                  onSelect={() => navigate("/community")}
+                  onSelect={() => openDocumentsPicker()}
                 >
                   <div className="flex items-start gap-2">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0" />
                     <div className="flex min-w-0 flex-col items-start gap-0">
                       <span>Documents</span>
                       <span className="text-xs text-muted-foreground">
-                        Community
+                        Attach to email
                       </span>
                     </div>
                   </div>
@@ -642,7 +948,43 @@ export default function CommunicationMessagesPage() {
           disabled={mutation.isPending}
           className="text-sm"
         />
+        {selectedDocumentIds.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selectedDocumentIds.map((id) => (
+              <Badge
+                key={id}
+                variant="secondary"
+                className="gap-0.5 pr-1 font-normal max-w-full"
+              >
+                <span className="truncate max-w-[12rem]">
+                  {documentTitlesById[id] ?? id}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0 rounded-sm"
+                  onClick={() => removeDocumentChip(id)}
+                  aria-label={`Remove ${documentTitlesById[id] ?? "document"}`}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2 items-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="shrink-0 h-10 w-10"
+            onClick={openDocumentsPicker}
+            disabled={mutation.isPending}
+            aria-label="Attach documents"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
           <Textarea
             placeholder="Write a message… (Ctrl+Enter to send)"
             value={body}
@@ -672,6 +1014,132 @@ export default function CommunicationMessagesPage() {
           <p className="text-xs text-destructive">{sendError}</p>
         )}
       </div>
+
+      <Dialog open={documentsOpen} onOpenChange={setDocumentsOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Attach documents</DialogTitle>
+            <DialogDescription>
+              Select community or client documents to send with your message.
+            </DialogDescription>
+          </DialogHeader>
+          <Tabs
+            value={documentPickerTab}
+            onValueChange={setDocumentPickerTab}
+            className="flex flex-col flex-1 min-h-0 gap-3"
+          >
+            <TabsList className="grid w-full grid-cols-2 shrink-0">
+              <TabsTrigger value="common">Common</TabsTrigger>
+              <TabsTrigger value="client">Client</TabsTrigger>
+            </TabsList>
+            <TabsContent
+              value="common"
+              className="mt-0 flex flex-col gap-2 flex-1 min-h-0 data-[state=inactive]:hidden"
+            >
+              <ScrollArea className="h-[min(240px,40vh)] rounded-md border">
+                <div className="p-2">
+                  {loadingCommon ? (
+                    <div className="space-y-2 py-1">
+                      <Skeleton className="h-9 w-full" />
+                      <Skeleton className="h-9 w-full" />
+                      <Skeleton className="h-9 w-full" />
+                    </div>
+                  ) : documentsCommon.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8 px-2">
+                      No common documents
+                    </p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {documentsCommon.map((doc) => (
+                        <li
+                          key={doc.id}
+                          className="flex items-start gap-2 rounded-md p-2 hover:bg-muted/60"
+                        >
+                          <Checkbox
+                            id={`pick-common-${doc.id}`}
+                            checked={selectedDocumentIds.includes(doc.id)}
+                            onCheckedChange={(c) =>
+                              toggleDocumentSelection(doc.id, doc.title, c === true)
+                            }
+                            className="mt-0.5"
+                          />
+                          <label
+                            htmlFor={`pick-common-${doc.id}`}
+                            className="text-sm leading-snug cursor-pointer flex-1"
+                          >
+                            {doc.title}
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </ScrollArea>
+              {paginationCommon ? (
+                <DocumentPickerPagination
+                  pagination={paginationCommon}
+                  onPageChange={setPageCommon}
+                />
+              ) : null}
+            </TabsContent>
+            <TabsContent
+              value="client"
+              className="mt-0 flex flex-col gap-2 flex-1 min-h-0 data-[state=inactive]:hidden"
+            >
+              <ScrollArea className="h-[min(240px,40vh)] rounded-md border">
+                <div className="p-2">
+                  {loadingClient ? (
+                    <div className="space-y-2 py-1">
+                      <Skeleton className="h-9 w-full" />
+                      <Skeleton className="h-9 w-full" />
+                      <Skeleton className="h-9 w-full" />
+                    </div>
+                  ) : documentsClient.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8 px-2">
+                      No client documents
+                    </p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {documentsClient.map((doc) => (
+                        <li
+                          key={doc.id}
+                          className="flex items-start gap-2 rounded-md p-2 hover:bg-muted/60"
+                        >
+                          <Checkbox
+                            id={`pick-client-${doc.id}`}
+                            checked={selectedDocumentIds.includes(doc.id)}
+                            onCheckedChange={(c) =>
+                              toggleDocumentSelection(doc.id, doc.title, c === true)
+                            }
+                            className="mt-0.5"
+                          />
+                          <label
+                            htmlFor={`pick-client-${doc.id}`}
+                            className="text-sm leading-snug cursor-pointer flex-1"
+                          >
+                            {doc.title}
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </ScrollArea>
+              {paginationClient ? (
+                <DocumentPickerPagination
+                  pagination={paginationClient}
+                  onPageChange={setPageClient}
+                />
+              ) : null}
+            </TabsContent>
+          </Tabs>
+          <DialogFooter className="shrink-0 sm:justify-end">
+            <Button type="button" onClick={() => setDocumentsOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={inPersonTourOpen} onOpenChange={setInPersonTourOpen}>
         <DialogContent className="sm:max-w-md">

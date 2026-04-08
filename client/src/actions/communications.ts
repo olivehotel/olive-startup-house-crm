@@ -17,6 +17,7 @@ export const sendEmailMessage = (payload: {
   communication_id: string;
   body: string;
   subject: string;
+  document_ids?: string[];
 }) =>
   apiFetch<{ success: boolean }>("send-email-message", {
     method: "POST",

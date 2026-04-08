@@ -450,7 +450,7 @@ export function CommunityMaterials() {
     setDeleting(true);
     console.log("deletingDoc", deletingDoc);
     try {
-      await deleteCommunityDocument(deletingDoc.id, deletingDoc.doc_type);
+      await deleteCommunityDocument(deletingDoc.id, deletingDoc.doc_type ?? "common");
       toast({ title: "Material deleted", description: `"${deletingDoc.title}" has been removed.` });
       setDeletingDoc(null);
       await refreshBothLists();
