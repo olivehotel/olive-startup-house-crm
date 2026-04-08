@@ -466,6 +466,15 @@ export default function CommunicationMessagesPage() {
   const [tourEnd, setTourEnd] = useState("");
   const [tourFormError, setTourFormError] = useState<string | null>(null);
 
+  const [phoneCallSetupOpen, setPhoneCallSetupOpen] = useState(false);
+  const [callTitle, setCallTitle] = useState("");
+  const [callDescription, setCallDescription] = useState("");
+  const [callLocation, setCallLocation] = useState("");
+  const [callStart, setCallStart] = useState("");
+  const [callEnd, setCallEnd] = useState("");
+  const [callFormError, setCallFormError] = useState<string | null>(null);
+  const scheduleKindRef = useRef<"tour" | "phone">("tour");
+
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [documentPickerTab, setDocumentPickerTab] = useState("common");
   const [pageCommon, setPageCommon] = useState(1);
@@ -671,6 +680,7 @@ export default function CommunicationMessagesPage() {
   const createCalendarMutation = useMutation({
     mutationFn: createCalendarEvent,
     onSuccess: () => {
+      const kind = scheduleKindRef.current;
       setTourFormError(null);
       setInPersonTourOpen(false);
       setTourTitle("");
@@ -678,9 +688,19 @@ export default function CommunicationMessagesPage() {
       setTourLocation("");
       setTourStart("");
       setTourEnd("");
+      setCallFormError(null);
+      setPhoneCallSetupOpen(false);
+      setCallTitle("");
+      setCallDescription("");
+      setCallLocation("");
+      setCallStart("");
+      setCallEnd("");
       toast({
         title: "Meeting scheduled",
-        description: "Your in-person tour is on the thread.",
+        description:
+          kind === "phone"
+            ? "Your phone call is on the thread."
+            : "Your in-person tour is on the thread.",
       });
       queryClient.invalidateQueries({
         queryKey: ["communication-messages", communicationId],
@@ -718,6 +738,7 @@ export default function CommunicationMessagesPage() {
       return;
     }
     setTourFormError(null);
+    scheduleKindRef.current = "tour";
     createCalendarMutation.mutate({
       communication_id: communicationId,
       title,
@@ -725,6 +746,40 @@ export default function CommunicationMessagesPage() {
       end: end.toISOString(),
       description: tourDescription.trim(),
       location: tourLocation.trim(),
+    });
+  }
+
+  function handleSubmitPhoneCallSetup(e: React.FormEvent) {
+    e.preventDefault();
+    if (!communicationId) return;
+    const title = callTitle.trim();
+    if (!title) {
+      setCallFormError("Title is required.");
+      return;
+    }
+    if (!callStart || !callEnd) {
+      setCallFormError("Start and end are required.");
+      return;
+    }
+    const start = new Date(callStart);
+    const end = new Date(callEnd);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      setCallFormError("Invalid date or time.");
+      return;
+    }
+    if (end <= start) {
+      setCallFormError("End must be after start.");
+      return;
+    }
+    setCallFormError(null);
+    scheduleKindRef.current = "phone";
+    createCalendarMutation.mutate({
+      communication_id: communicationId,
+      title,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      description: callDescription.trim(),
+      location: callLocation.trim(),
     });
   }
 
@@ -862,18 +917,15 @@ export default function CommunicationMessagesPage() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
-                  onSelect={() => {
-                    toast({
-                      title: "Phone call",
-                      description:
-                        "No phone number on this thread yet. Add it to the lead record to dial from here.",
-                    });
-                  }}
+                  onSelect={() => setPhoneCallSetupOpen(true)}
                 >
                   <div className="flex items-start gap-2">
                     <Phone className="mt-0.5 h-4 w-4 shrink-0" />
                     <div className="flex min-w-0 flex-col items-start gap-0">
-                      <span>Phone call</span>
+                      <span>Phone call setup</span>
+                      <span className="text-xs text-muted-foreground">
+                        Schedule a call
+                      </span>
                     </div>
                   </div>
                 </DropdownMenuItem>
@@ -1219,6 +1271,103 @@ export default function CommunicationMessagesPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setInPersonTourOpen(false)}
+                disabled={createCalendarMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createCalendarMutation.isPending}>
+                {createCalendarMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Scheduling…
+                  </>
+                ) : (
+                  "Create meeting"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={phoneCallSetupOpen} onOpenChange={setPhoneCallSetupOpen}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleSubmitPhoneCallSetup}>
+            <DialogHeader>
+              <DialogTitle>Phone call setup</DialogTitle>
+              <DialogDescription>
+                Schedule when you will call. It will appear in the chat after
+                the event is created.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="call-title">Title</Label>
+                <Input
+                  id="call-title"
+                  value={callTitle}
+                  onChange={(e) => setCallTitle(e.target.value)}
+                  placeholder="Phone call"
+                  disabled={createCalendarMutation.isPending}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="call-start">Start</Label>
+                  <Input
+                    id="call-start"
+                    type="datetime-local"
+                    value={callStart}
+                    onChange={(e) => setCallStart(e.target.value)}
+                    disabled={createCalendarMutation.isPending}
+                    className="datetime-local-input block h-auto min-h-10 py-2"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="call-end">End</Label>
+                  <Input
+                    id="call-end"
+                    type="datetime-local"
+                    value={callEnd}
+                    onChange={(e) => setCallEnd(e.target.value)}
+                    disabled={createCalendarMutation.isPending}
+                    className="datetime-local-input block h-auto min-h-10 py-2"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="call-location">Phone number or dial-in</Label>
+                <Input
+                  id="call-location"
+                  value={callLocation}
+                  onChange={(e) => setCallLocation(e.target.value)}
+                  placeholder="Optional"
+                  disabled={createCalendarMutation.isPending}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="call-description">Description</Label>
+                <Textarea
+                  id="call-description"
+                  value={callDescription}
+                  onChange={(e) => setCallDescription(e.target.value)}
+                  placeholder="Optional notes"
+                  rows={3}
+                  disabled={createCalendarMutation.isPending}
+                  className="resize-none"
+                />
+              </div>
+              {callFormError && (
+                <p className="text-sm text-destructive">{callFormError}</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPhoneCallSetupOpen(false)}
                 disabled={createCalendarMutation.isPending}
               >
                 Cancel
