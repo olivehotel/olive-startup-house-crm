@@ -12,6 +12,12 @@ export const getCommunityDocuments = (page = 1) =>
     { params: { page } },
   );
 
+export const getClientDocuments = (page = 1) =>
+  apiFetch<{ documents: CommunityDocument[]; pagination: CommunityDocumentsPagination }>(
+    "get_client_documents",
+    { params: { page } },
+  );
+
 export const getCommunityProfiles = (page = 1) =>
   apiFetch<{ profiles: CommunityProfile[]; pagination: CommunityProfilesPagination }>(
     "get_community_profiles",
@@ -31,10 +37,10 @@ export const editCommunityProfile = (form: FormData) =>
     body: form,
   });
 
-export const deleteCommunityDocument = (documentId: string) =>
+export const deleteCommunityDocument = (documentId: string, docType: CommunityDocumentType) =>
   apiFetch<unknown>("community-delete-document", {
     method: "DELETE",
-    body: { document_id: documentId },
+    body: { document_id: documentId, doc_type: docType },
   });
 
 /** Multipart PATCH: append document_id (required) and only fields you want to update */

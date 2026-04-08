@@ -366,11 +366,16 @@ export interface CommunityDocumentsPagination {
 /** Pagination metadata from get_community_profiles edge function (same shape as documents) */
 export type CommunityProfilesPagination = CommunityDocumentsPagination;
 
+/** Who the material is for: community-wide vs client-specific */
+export type CommunityDocumentAudience = "common" | "client";
+
 // Community Document
 export interface CommunityDocument {
   id: string;
   title: string;
   description?: string | null;
+  /** Audience for the document (from edge functions). Omitted or unknown → treat as common. */
+  doc_type?: CommunityDocumentAudience;
   /** Present when API returns flat type id */
   type_id?: MaterialTypeId;
   /** Present when API returns nested type (e.g. type.value for icons) */
