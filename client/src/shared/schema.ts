@@ -366,18 +366,23 @@ export interface CommunityDocumentsPagination {
 /** Pagination metadata from get_community_profiles edge function (same shape as documents) */
 export type CommunityProfilesPagination = CommunityDocumentsPagination;
 
+/** Who the material is for: community-wide vs client-specific */
+export type CommunityDocumentAudience = "common" | "client";
+
 // Community Document
 export interface CommunityDocument {
   id: string;
   title: string;
   description?: string | null;
+  /** Audience for the document (from edge functions). Omitted or unknown → treat as common. */
+  doc_type?: CommunityDocumentAudience;
   /** Present when API returns flat type id */
   type_id?: MaterialTypeId;
   /** Present when API returns nested type (e.g. type.value for icons) */
   type?: { id: string; value: MaterialTypeValue };
   url?: string;
   link?: string | null;
-  /** Storage object key in bucket `community-documents` (non-link materials) */
+  /** Storage object key in bucket `community-documents` for non-link materials (common and client audiences) */
   file_path?: string | null;
   created_at?: string;
 }
@@ -415,6 +420,18 @@ export interface CommunityStats {
   eventsChange: number;
 }
 
+/** Attachment metadata returned on each mail from get-communication-messages */
+export interface CommunicationMessageAttachment {
+  id: string;
+  filename?: string | null;
+  bucket?: string | null;
+  file_path?: string | null;
+  mime_type?: string | null;
+  /** Legacy or alternate API shapes */
+  title?: string | null;
+  url?: string | null;
+}
+
 // Communication Message (from get-communication-messages)
 export interface CommunicationMessage {
   id: string;
@@ -427,6 +444,7 @@ export interface CommunicationMessage {
   body_html?: string;
   date: string;
   received_at: string;
+  attachments?: CommunicationMessageAttachment[];
 }
 
 export interface CommunicationDetail {

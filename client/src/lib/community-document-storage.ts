@@ -1,6 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { CommunityDocument } from "@shared/schema";
 
 export const COMMUNITY_DOCUMENTS_BUCKET = "community-documents";
+
+/** Storage bucket for all community materials (common and client audiences). doc_type only affects listings, not the bucket. */
+export function storageBucketForCommunityDocument(
+  _doc: Pick<CommunityDocument, "doc_type">,
+): string {
+  return COMMUNITY_DOCUMENTS_BUCKET;
+}
+
+/** Maps raw Storage API errors to clearer copy when the bucket is missing or misconfigured. */
+export function formatCommunityDocumentDownloadError(message: string, bucket: string): string {
+  if (/bucket not found/i.test(message)) {
+    return `Storage bucket "${bucket}" was not found. Create it in Supabase Storage (see supabase/migrations/) and ensure load_community_document uploads use this bucket.`;
+  }
+  return message;
+}
 
 /**
  * Reduces API values to the object key inside the bucket (no domain, no /storage/v1/ prefix).
@@ -172,5 +188,5 @@ export async function downloadCommunityDocumentFromStorage(
     lastMessage = result.error;
   }
 
-  return { ok: false, message: lastMessage };
+  return { ok: false, message: formatCommunityDocumentDownloadError(lastMessage, bucket) };
 }

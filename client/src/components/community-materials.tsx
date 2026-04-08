@@ -27,8 +27,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
-  COMMUNITY_DOCUMENTS_BUCKET,
   downloadCommunityDocumentFromStorage,
+  storageBucketForCommunityDocument,
 } from "@/lib/community-document-storage";
 import type {
   InsertMaterial,
@@ -36,6 +36,7 @@ import type {
   MaterialTypeValue,
   CommunityDocument,
   CommunityDocumentsPagination,
+  CommunityDocumentAudience,
 } from "@shared/schema";
 import { insertMaterialSchema, materialTypes, materialTypeIds } from "@shared/schema";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -55,7 +56,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { getCommunityDocuments, editCommunityDocument, deleteCommunityDocument } from "@/actions/community";
+import {
+  getCommunityDocuments,
+  getClientDocuments,
+  editCommunityDocument,
+  deleteCommunityDocument,
+} from "@/actions/community";
 
 const LINK_TYPE_ID: MaterialTypeId = materialTypeIds.link;
 const DOCUMENT_TYPE_ID: MaterialTypeId = materialTypeIds.document;
@@ -102,15 +108,160 @@ function materialTypeIdForDoc(doc: CommunityDocument): MaterialTypeId {
   return materialTypeIds.document;
 }
 
+function MaterialDocRow({
+  doc,
+  downloadingId,
+  onEdit,
+  onDelete,
+  onDownload,
+}: {
+  doc: CommunityDocument;
+  downloadingId: string | null;
+  onEdit: (doc: CommunityDocument) => void;
+  onDelete: (doc: CommunityDocument) => void;
+  onDownload: (doc: CommunityDocument) => void;
+}) {
+  const config = materialRowConfig(doc);
+  const Icon = config.icon;
+  const href = doc.link ?? doc.url;
+  const canDownloadFromStorage = !isLinkDocument(doc) && !!doc.file_path;
+  const showExternalLink = !!href && (isLinkDocument(doc) || !doc.file_path);
+  const isDownloading = downloadingId === doc.id;
+  return (
+    <div className="flex items-start gap-3 p-3 hover:bg-muted/30 transition-colors">
+      <span className={`inline-flex items-center justify-center rounded-md p-2 flex-shrink-0 ${config.color}`}>
+        {isDownloading ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Icon className="h-4 w-4" />
+        )}
+      </span>
+      <div
+        className={
+          canDownloadFromStorage
+            ? "min-w-0 flex-1 text-left cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            : "min-w-0 flex-1"
+        }
+        role={canDownloadFromStorage ? "button" : undefined}
+        tabIndex={canDownloadFromStorage ? 0 : undefined}
+        aria-busy={canDownloadFromStorage ? isDownloading : undefined}
+        aria-label={canDownloadFromStorage ? `Download ${doc.title}` : undefined}
+        onClick={
+          canDownloadFromStorage && !isDownloading ? () => void onDownload(doc) : undefined
+        }
+        onKeyDown={
+          canDownloadFromStorage && !isDownloading
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  void onDownload(doc);
+                }
+              }
+            : undefined
+        }
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-medium text-sm truncate">{doc.title}</p>
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${config.color}`}>
+            {config.label}
+          </span>
+        </div>
+        {doc.description && (
+          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{doc.description}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-0.5 flex-shrink-0">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          aria-label="Edit material"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(doc);
+          }}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          aria-label="Delete material"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(doc);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+        {showExternalLink && href && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-primary transition-colors p-2"
+            aria-label="Open link"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DocumentListPagination({
+  pagination,
+  onPageChange,
+}: {
+  pagination: CommunityDocumentsPagination;
+  onPageChange: (page: number) => void;
+}) {
+  if (pagination.total_pages <= 1) return null;
+  return (
+    <div className="flex items-center justify-center gap-3 pt-2 border-t border-border">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(Math.max(1, pagination.page - 1))}
+        disabled={!pagination.has_prev}
+      >
+        <ChevronLeft className="h-4 w-4 mr-1" />
+      </Button>
+      <span className="text-sm text-muted-foreground">
+        Page {pagination.page} of {pagination.total_pages}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(pagination.page + 1)}
+        disabled={!pagination.has_next}
+      >
+        <ChevronRight className="h-4 w-4 ml-1" />
+      </Button>
+    </div>
+  );
+}
+
 export function CommunityMaterials() {
   const { toast } = useToast();
   const [showAddForm, setShowAddForm] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mainFile, setMainFile] = useState<File | null>(null);
-  const [documents, setDocuments] = useState<CommunityDocument[]>([]);
-  const [pagination, setPagination] = useState<CommunityDocumentsPagination | null>(null);
-  const [page, setPage] = useState(1);
-  const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [addAudience, setAddAudience] = useState<CommunityDocumentAudience>("common");
+
+  const [documentsCommon, setDocumentsCommon] = useState<CommunityDocument[]>([]);
+  const [paginationCommon, setPaginationCommon] = useState<CommunityDocumentsPagination | null>(null);
+  const [pageCommon, setPageCommon] = useState(1);
+  const [loadingCommon, setLoadingCommon] = useState(true);
+
+  const [documentsClient, setDocumentsClient] = useState<CommunityDocument[]>([]);
+  const [paginationClient, setPaginationClient] = useState<CommunityDocumentsPagination | null>(null);
+  const [pageClient, setPageClient] = useState(1);
+  const [loadingClient, setLoadingClient] = useState(true);
 
   const [editingDoc, setEditingDoc] = useState<CommunityDocument | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -132,26 +283,49 @@ export function CommunityMaterials() {
   const selectedType = form.watch("type") as MaterialTypeId;
   const isLinkType = selectedType === LINK_TYPE_ID;
 
-  const loadPage = useCallback(async (p: number) => {
-    setLoadingDocuments(true);
+  const loadCommonPage = useCallback(async (p: number) => {
+    setLoadingCommon(true);
     try {
       const { documents: docs, pagination: pag } = await getCommunityDocuments(p);
-      setDocuments(docs ?? []);
-      setPagination(pag);
+      const filtered = (docs ?? []).filter((d) => d.doc_type !== "client");
+      setDocumentsCommon(filtered);
+      setPaginationCommon(pag);
     } catch {
-      setPagination(null);
+      setPaginationCommon(null);
     } finally {
-      setLoadingDocuments(false);
+      setLoadingCommon(false);
+    }
+  }, []);
+
+  const loadClientPage = useCallback(async (p: number) => {
+    setLoadingClient(true);
+    try {
+      const { documents: docs, pagination: pag } = await getClientDocuments(p);
+      setDocumentsClient(docs ?? []);
+      setPaginationClient(pag);
+    } catch {
+      setPaginationClient(null);
+    } finally {
+      setLoadingClient(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadPage(page);
-  }, [page, loadPage]);
+    void loadCommonPage(pageCommon);
+  }, [pageCommon, loadCommonPage]);
+
+  useEffect(() => {
+    void loadClientPage(pageClient);
+  }, [pageClient, loadClientPage]);
+
+  const refreshBothLists = useCallback(async () => {
+    await Promise.all([loadCommonPage(pageCommon), loadClientPage(pageClient)]);
+  }, [loadCommonPage, loadClientPage, pageCommon, pageClient]);
 
   const resetForm = () => {
     form.reset();
     setMainFile(null);
+    setAddAudience("common");
     setShowAddForm(false);
   };
 
@@ -177,12 +351,14 @@ export function CommunityMaterials() {
       } else {
         body.append("file", mainFile!);
       }
+      body.append("doc_type", addAudience);
 
       const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
       if (refreshError || !refreshData.session?.access_token) {
         throw new Error("Session expired — please log out and log in again.");
       }
 
+      // load_community_document should store files in `community-documents` for both doc_type values (listing uses doc_type only).
       const { error: fnError } = await supabase.functions.invoke("load_community_document", {
         body,
         headers: { Authorization: `Bearer ${refreshData.session.access_token}` },
@@ -191,10 +367,12 @@ export function CommunityMaterials() {
 
       resetForm();
       toast({ title: "Material uploaded", description: `"${data.title}" has been sent.` });
-      if (page === 1) {
-        await loadPage(1);
+      if (addAudience === "common") {
+        if (pageCommon === 1) await loadCommonPage(1);
+        else setPageCommon(1);
       } else {
-        setPage(1);
+        if (pageClient === 1) await loadClientPage(1);
+        else setPageClient(1);
       }
     } catch (err) {
       toast({
@@ -251,11 +429,12 @@ export function CommunityMaterials() {
       } else if (editFile) {
         fd.append("file", editFile);
       }
+      fd.append("doc_type", editingDoc.doc_type ?? "common");
       await editCommunityDocument(fd);
       toast({ title: "Material updated", description: `"${editTitle.trim()}" has been saved.` });
       setEditingDoc(null);
       setEditFile(null);
-      await loadPage(page);
+      await refreshBothLists();
     } catch (err) {
       toast({
         title: "Update failed",
@@ -270,11 +449,12 @@ export function CommunityMaterials() {
   const confirmDelete = async () => {
     if (!deletingDoc) return;
     setDeleting(true);
+    console.log("deletingDoc", deletingDoc);
     try {
-      await deleteCommunityDocument(deletingDoc.id);
+      await deleteCommunityDocument(deletingDoc.id, deletingDoc.doc_type ?? "common");
       toast({ title: "Material deleted", description: `"${deletingDoc.title}" has been removed.` });
       setDeletingDoc(null);
-      await loadPage(page);
+      await refreshBothLists();
     } catch (err) {
       toast({
         title: "Delete failed",
@@ -292,7 +472,7 @@ export function CommunityMaterials() {
     try {
       const result = await downloadCommunityDocumentFromStorage(
         supabase,
-        COMMUNITY_DOCUMENTS_BUCKET,
+        storageBucketForCommunityDocument(doc),
         doc.file_path,
         doc.title,
       );
@@ -369,6 +549,24 @@ export function CommunityMaterials() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <label htmlFor="community-doc-type" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Document type
+                  </label>
+                  <Select
+                    value={addAudience}
+                    onValueChange={(v) => setAddAudience(v as CommunityDocumentAudience)}
+                  >
+                    <SelectTrigger id="community-doc-type" className="w-full sm:max-w-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="common">common</SelectItem>
+                      <SelectItem value="client">client</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {isLinkType ? (
                   <FormField
                     control={form.control}
@@ -429,141 +627,87 @@ export function CommunityMaterials() {
           </div>
         )}
 
-        {loadingDocuments ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : documents.length > 0 ? (
-          <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
-            {documents.map((doc) => {
-              const config = materialRowConfig(doc);
-              const Icon = config.icon;
-              const href = doc.link ?? doc.url;
-              const canDownloadFromStorage = !isLinkDocument(doc) && !!doc.file_path;
-              const showExternalLink = !!href && (isLinkDocument(doc) || !doc.file_path);
-              const isDownloading = downloadingId === doc.id;
-              return (
-                <div key={doc.id} className="flex items-start gap-3 p-3 hover:bg-muted/30 transition-colors">
-                  <span className={`inline-flex items-center justify-center rounded-md p-2 flex-shrink-0 ${config.color}`}>
-                    {isDownloading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Icon className="h-4 w-4" />
-                    )}
-                  </span>
-                  <div
-                    className={
-                      canDownloadFromStorage
-                        ? "min-w-0 flex-1 text-left cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        : "min-w-0 flex-1"
-                    }
-                    role={canDownloadFromStorage ? "button" : undefined}
-                    tabIndex={canDownloadFromStorage ? 0 : undefined}
-                    aria-busy={canDownloadFromStorage ? isDownloading : undefined}
-                    aria-label={canDownloadFromStorage ? `Download ${doc.title}` : undefined}
-                    onClick={
-                      canDownloadFromStorage && !isDownloading
-                        ? () => void handleDownloadMaterial(doc)
-                        : undefined
-                    }
-                    onKeyDown={
-                      canDownloadFromStorage && !isDownloading
-                        ? (e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              void handleDownloadMaterial(doc);
-                            }
-                          }
-                        : undefined
-                    }
-                  >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm truncate">{doc.title}</p>
-                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${config.color}`}>
-                        {config.label}
-                      </span>
-                    </div>
-                    {doc.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{doc.description}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-0.5 flex-shrink-0">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label="Edit material"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEdit(doc);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      aria-label="Delete material"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeletingDoc(doc);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    {showExternalLink && href && (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary transition-colors p-2"
-                        aria-label="Open link"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {pagination && pagination.total_pages > 1 && (
-              <div className="flex items-center justify-center gap-3 pt-2 border-t border-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={!pagination.has_prev}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  Page {pagination.page} of {pagination.total_pages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={!pagination.has_next}
-                >
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
+        <div className="space-y-8">
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground">General community documents</h3>
+            {loadingCommon ? (
+              <div className="flex items-center justify-center py-12 rounded-lg border border-border">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
+            ) : documentsCommon.length > 0 ? (
+              <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
+                {documentsCommon.map((doc) => (
+                  <MaterialDocRow
+                    key={doc.id}
+                    doc={doc}
+                    downloadingId={downloadingId}
+                    onEdit={openEdit}
+                    onDelete={setDeletingDoc}
+                    onDownload={handleDownloadMaterial}
+                  />
+                ))}
+                {paginationCommon && (
+                  <DocumentListPagination
+                    pagination={paginationCommon}
+                    onPageChange={setPageCommon}
+                  />
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-6 px-1 rounded-lg border border-dashed border-border text-center">
+                No common documents yet.
+              </p>
             )}
           </div>
-        ) : !showAddForm ? (
-          <div className="text-center py-12">
-            <BookOpen className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
-            <p className="text-muted-foreground mt-4">No materials added yet</p>
-            <p className="text-sm text-muted-foreground">Upload documents, slides, or tips for your residents.</p>
-            <Button className="mt-4" onClick={() => setShowAddForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Your First Material
-            </Button>
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground">Documents for customers</h3>
+            {loadingClient ? (
+              <div className="flex items-center justify-center py-12 rounded-lg border border-border">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : documentsClient.length > 0 ? (
+              <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
+                {documentsClient.map((doc) => (
+                  <MaterialDocRow
+                    key={doc.id}
+                    doc={doc}
+                    downloadingId={downloadingId}
+                    onEdit={openEdit}
+                    onDelete={setDeletingDoc}
+                    onDownload={handleDownloadMaterial}
+                  />
+                ))}
+                {paginationClient && (
+                  <DocumentListPagination
+                    pagination={paginationClient}
+                    onPageChange={setPageClient}
+                  />
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-6 px-1 rounded-lg border border-dashed border-border text-center">
+                No client documents yet.
+              </p>
+            )}
           </div>
-        ) : null}
+        </div>
+
+        {!loadingCommon &&
+          !loadingClient &&
+          documentsCommon.length === 0 &&
+          documentsClient.length === 0 &&
+          !showAddForm && (
+            <div className="text-center py-8 -mt-4">
+              <BookOpen className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+              <p className="text-muted-foreground mt-4">No materials added yet</p>
+              <p className="text-sm text-muted-foreground">Upload documents, slides, or tips for your residents.</p>
+              <Button className="mt-4" onClick={() => setShowAddForm(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Your First Material
+              </Button>
+            </div>
+          )}
       </CardContent>
     </Card>
 
@@ -614,7 +758,15 @@ export function CommunityMaterials() {
           </div>
         )}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => { setEditingDoc(null); setEditFile(null); }} disabled={savingEdit}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setEditingDoc(null);
+              setEditFile(null);
+            }}
+            disabled={savingEdit}
+          >
             Cancel
           </Button>
           <Button type="button" onClick={() => void saveEdit()} disabled={savingEdit}>

@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/api";
 import type {
   CommunityDocument,
+  CommunityDocumentAudience,
   CommunityDocumentsPagination,
   CommunityProfile,
   CommunityProfilesPagination,
@@ -9,6 +10,12 @@ import type {
 export const getCommunityDocuments = (page = 1) =>
   apiFetch<{ documents: CommunityDocument[]; pagination: CommunityDocumentsPagination }>(
     "get_community_documents",
+    { params: { page } },
+  );
+
+export const getClientDocuments = (page = 1) =>
+  apiFetch<{ documents: CommunityDocument[]; pagination: CommunityDocumentsPagination }>(
+    "get_client_documents",
     { params: { page } },
   );
 
@@ -31,10 +38,10 @@ export const editCommunityProfile = (form: FormData) =>
     body: form,
   });
 
-export const deleteCommunityDocument = (documentId: string) =>
+export const deleteCommunityDocument = (documentId: string, docType: CommunityDocumentAudience) =>
   apiFetch<unknown>("community-delete-document", {
     method: "DELETE",
-    body: { document_id: documentId },
+    body: { document_id: documentId, doc_type: docType },
   });
 
 /** Multipart PATCH: append document_id (required) and only fields you want to update */
