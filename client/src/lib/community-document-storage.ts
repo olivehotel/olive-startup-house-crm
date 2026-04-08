@@ -2,18 +2,23 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CommunityDocument } from "@shared/schema";
 
 export const COMMUNITY_DOCUMENTS_BUCKET = "community-documents";
+/** Parallel naming to community-documents; used when doc_type is client. */
+export const CLIENT_DOCUMENTS_BUCKET = "client-documents";
 
-/** Storage bucket for all community materials (common and client audiences). doc_type only affects listings, not the bucket. */
 export function storageBucketForCommunityDocument(
-  _doc: Pick<CommunityDocument, "doc_type">,
+  doc: Pick<CommunityDocument, "doc_type">,
 ): string {
-  return COMMUNITY_DOCUMENTS_BUCKET;
+  return doc.doc_type === "client" ? CLIENT_DOCUMENTS_BUCKET : COMMUNITY_DOCUMENTS_BUCKET;
 }
 
 /** Maps raw Storage API errors to clearer copy when the bucket is missing or misconfigured. */
 export function formatCommunityDocumentDownloadError(message: string, bucket: string): string {
   if (/bucket not found/i.test(message)) {
-    return `Storage bucket "${bucket}" was not found. Create it in Supabase Storage (see supabase/migrations/) and ensure load_community_document uploads use this bucket.`;
+    const tail =
+      bucket === CLIENT_DOCUMENTS_BUCKET
+        ? `Create "${CLIENT_DOCUMENTS_BUCKET}" in Supabase Storage (see supabase/migrations/) and ensure load_community_document uploads client materials to that bucket.`
+        : `Create "${COMMUNITY_DOCUMENTS_BUCKET}" in Supabase Storage (see supabase/migrations/) and ensure load_community_document uploads use that bucket.`;
+    return `Storage bucket "${bucket}" was not found. ${tail}`;
   }
   return message;
 }

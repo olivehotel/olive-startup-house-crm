@@ -358,7 +358,7 @@ export function CommunityMaterials() {
         throw new Error("Session expired — please log out and log in again.");
       }
 
-      // load_community_document should store files in `community-documents` for both doc_type values (listing uses doc_type only).
+      // load_community_document: `community-documents` when doc_type is common, `client-documents` when client.
       const { error: fnError } = await supabase.functions.invoke("load_community_document", {
         body,
         headers: { Authorization: `Bearer ${refreshData.session.access_token}` },
