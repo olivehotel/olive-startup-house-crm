@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog,
   DialogContent,
@@ -629,6 +630,7 @@ export default function CommunicationMessagesPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const communicationId = params.id;
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -1050,7 +1052,11 @@ export default function CommunicationMessagesPage() {
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[12rem]">
+              <DropdownMenuContent
+                align={isMobile ? "start" : "end"}
+                collisionPadding={8}
+                className="min-w-[12rem] max-w-[min(20rem,calc(100vw-1rem))] sm:max-w-none"
+              >
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="h-auto cursor-pointer gap-2 py-2 pl-2 pr-1 [&>svg:last-child]:ml-0">
                     <Video className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1062,7 +1068,8 @@ export default function CommunicationMessagesPage() {
                     </div>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent
-                    alignOffset={-4}
+                    side={isMobile ? "bottom" : "right"}
+                    alignOffset={isMobile ? 0 : -4}
                     className="min-w-[12rem]"
                   >
                     {VIDEO_TOUR_OPTIONS.map((opt) => (
@@ -1140,7 +1147,8 @@ export default function CommunicationMessagesPage() {
                     </div>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent
-                    alignOffset={-4}
+                    side={isMobile ? "bottom" : "right"}
+                    alignOffset={isMobile ? 0 : -4}
                     className="min-w-[12rem]"
                   >
                     {INVOICE_PAYMENT_OPTIONS.map((opt) => (
