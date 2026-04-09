@@ -26,7 +26,6 @@ import {
   Link,
   CheckCircle,
   Calendar,
-  Zap,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -71,10 +70,6 @@ export default function CommunicationPage() {
           <p className="text-muted-foreground">Manage all prospect communications across multiple channels</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <Zap className="h-4 w-4 mr-2" />
-            Automation
-          </Button>
           <Button data-testid="button-new-communication">
             <Plus className="h-4 w-4 mr-2" />
             New Communication

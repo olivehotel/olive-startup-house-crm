@@ -1,4 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import {
   createCalendarEvent,
@@ -26,6 +31,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
@@ -57,7 +65,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRef, useEffect, useMemo, useState, useCallback } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 
 const statusColors: Record<string, string> = {
@@ -67,6 +75,25 @@ const statusColors: Record<string, string> = {
   "Form Filled": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   "Completed": "bg-primary/10 text-primary",
 };
+
+/** YouTube tours opened from Quick actions → Video tour */
+const VIDEO_TOUR_OPTIONS = [
+  {
+    id: "tour-1",
+    label: "Palo Alto",
+    url: "https://www.youtube.com/watch?v=M2VGlukq8BA&t=11s",
+  },
+  {
+    id: "tour-2",
+    label: "San Francisco",
+    url: "https://www.youtube.com/watch?v=hKF2s49awQA",
+  },
+] as const;
+
+function appendVideoTourLinkToBody(prev: string, url: string): string {
+  if (!prev.trim()) return url;
+  return `${prev.trimEnd()}\n\n${url}`;
+}
 
 function formatDate(dateString: string) {
   const date = new Date(dateString);
@@ -135,6 +162,14 @@ function cleanMessageText(raw: string): string {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** Matches the block appended by formatMessageBodyWithAttachments (without duplicating it in UI when we list attachments separately). */
+const AUTO_ATTACHED_DOCS_SUFFIX =
+  /\r?\n\r?\nAttached documents:\r?\n(?:- [^\r\n]+\r?\n?)+$/;
+
+function stripAutoAttachedDocumentsSuffix(text: string): string {
+  return text.replace(AUTO_ATTACHED_DOCS_SUFFIX, "").trimEnd();
 }
 
 function getInitials(name: string) {
@@ -274,6 +309,20 @@ function DocumentPickerPagination({
   );
 }
 
+/** Appends selected document titles to the message body so they persist in the sent description. */
+function formatMessageBodyWithAttachments(
+  trimmedBody: string,
+  documentIds: string[],
+  titlesById: Record<string, string>,
+): string {
+  if (documentIds.length === 0) return trimmedBody;
+  const list = documentIds
+    .map((id) => `- ${titlesById[id]?.trim() || id}`)
+    .join("\n");
+  const attachmentBlock = `Attached documents:\n${list}`;
+  return trimmedBody ? `${trimmedBody}\n\n${attachmentBlock}` : attachmentBlock;
+}
+
 function MessageAttachmentChip({ att }: { att: CommunicationMessageAttachment }) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -339,11 +388,22 @@ function MessageAttachmentChip({ att }: { att: CommunicationMessageAttachment })
 
 function OutgoingAttachmentNames({
   attachments,
+  className,
 }: {
   attachments: CommunicationMessageAttachment[];
+  /** e.g. text-primary-foreground/90 when nested inside the outgoing bubble */
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col items-end gap-0.5 text-xs text-muted-foreground max-w-full">
+    <div
+      className={cn(
+        "flex flex-col items-end gap-0.5 text-xs max-w-full",
+        className ?? "text-muted-foreground",
+      )}
+    >
+      <span className="text-[0.7rem] font-medium uppercase tracking-wide opacity-80">
+        Attached documents
+      </span>
       {attachments.map((att) => (
         <span key={att.id} className="truncate max-w-[18rem] text-right">
           {att.filename ?? att.title ?? "Attachment"}
@@ -355,10 +415,19 @@ function OutgoingAttachmentNames({
 
 function MessageBubble({ message }: { message: CommunicationMessage }) {
   const isOutgoing = message.direction === "outgoing";
+  const hasAttachments = Boolean(message.attachments && message.attachments.length > 0);
 
   const senderDisplay = isOutgoing
     ? message.from
     : message.from.replace(/<.*>/, "").trim() || message.from;
+
+  const cleanedBodyText = message.body_text
+    ? cleanMessageText(message.body_text) || ""
+    : "";
+  const plainTextForBubble =
+    isOutgoing && hasAttachments
+      ? stripAutoAttachedDocumentsSuffix(cleanedBodyText) || cleanedBodyText
+      : cleanedBodyText;
 
   return (
     <div
@@ -398,46 +467,57 @@ function MessageBubble({ message }: { message: CommunicationMessage }) {
           </span>
         </div>
 
-        {message.attachments && message.attachments.length > 0 && (
-          <>
-            {isOutgoing ? (
-              <OutgoingAttachmentNames attachments={message.attachments} />
-            ) : (
-              <div
-                className={cn(
-                  "flex flex-wrap gap-1.5 max-w-full",
-                  "justify-start",
-                )}
-              >
-                {message.attachments.map((att) => (
-                  <MessageAttachmentChip key={att.id} att={att} />
-                ))}
-              </div>
+        {!isOutgoing && hasAttachments && (
+          <div
+            className={cn(
+              "flex flex-wrap gap-1.5 max-w-full",
+              "justify-start",
             )}
-          </>
+          >
+            {message.attachments!.map((att) => (
+              <MessageAttachmentChip key={att.id} att={att} />
+            ))}
+          </div>
         )}
 
         {message.body_html ? (
-          <div
-            className={cn(
-              "rounded-2xl overflow-hidden w-full max-w-full",
-              isOutgoing ? "rounded-tr-sm" : "rounded-tl-sm",
+          <>
+            <div
+              className={cn(
+                "rounded-2xl overflow-hidden w-full max-w-full",
+                isOutgoing ? "rounded-tr-sm" : "rounded-tl-sm",
+              )}
+            >
+              <HtmlEmailBody html={message.body_html} scopeId={message.id} />
+            </div>
+            {isOutgoing && hasAttachments && (
+              <div className="w-full max-w-full mt-1.5 pl-1">
+                <OutgoingAttachmentNames attachments={message.attachments!} />
+              </div>
             )}
-          >
-            <HtmlEmailBody html={message.body_html} scopeId={message.id} />
-          </div>
+          </>
         ) : (
           <div
             className={cn(
-              "rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words",
+              "rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words w-full max-w-full",
               isOutgoing
                 ? "bg-primary text-primary-foreground rounded-tr-sm"
                 : "bg-muted text-foreground rounded-tl-sm",
             )}
           >
-            {message.body_text
-              ? cleanMessageText(message.body_text) || "(no content)"
-              : "(no content)"}
+            <div className="px-4 py-2.5">
+              {message.body_text
+                ? plainTextForBubble || "(no content)"
+                : "(no content)"}
+            </div>
+            {isOutgoing && hasAttachments && (
+              <div className="border-t border-primary-foreground/25 px-4 py-2.5">
+                <OutgoingAttachmentNames
+                  attachments={message.attachments!}
+                  className="text-primary-foreground/95"
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -453,6 +533,7 @@ export default function CommunicationMessagesPage() {
   const communicationId = params.id;
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const composeBodyRef = useRef<HTMLTextAreaElement>(null);
 
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -479,14 +560,6 @@ export default function CommunicationMessagesPage() {
   const [documentPickerTab, setDocumentPickerTab] = useState("common");
   const [pageCommon, setPageCommon] = useState(1);
   const [pageClient, setPageClient] = useState(1);
-  const [documentsCommon, setDocumentsCommon] = useState<CommunityDocument[]>([]);
-  const [documentsClient, setDocumentsClient] = useState<CommunityDocument[]>([]);
-  const [paginationCommon, setPaginationCommon] =
-    useState<CommunityDocumentsPagination | null>(null);
-  const [paginationClient, setPaginationClient] =
-    useState<CommunityDocumentsPagination | null>(null);
-  const [loadingCommon, setLoadingCommon] = useState(false);
-  const [loadingClient, setLoadingClient] = useState(false);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [documentTitlesById, setDocumentTitlesById] = useState<Record<string, string>>(
     {},
@@ -543,58 +616,64 @@ export default function CommunicationMessagesPage() {
     ? communicationStatuses[comm.status_id]
     : undefined;
 
-  const loadCommonPage = useCallback(
-    async (p: number) => {
-      setLoadingCommon(true);
-      try {
-        const { documents: docs, pagination: pag } = await getCommunityDocuments(p);
-        const filtered = (docs ?? []).filter((d) => d.doc_type !== "client");
-        setDocumentsCommon(filtered);
-        setPaginationCommon(pag);
-      } catch (err) {
-        setPaginationCommon(null);
-        toast({
-          title: "Could not load common documents",
-          description: err instanceof Error ? err.message : "Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoadingCommon(false);
-      }
+  const commonDocsQuery = useQuery({
+    queryKey: ["community-documents", "common", pageCommon],
+    queryFn: async () => {
+      const { documents: docs, pagination: pag } = await getCommunityDocuments(pageCommon);
+      const filtered = (docs ?? []).filter((d) => d.doc_type !== "client");
+      return { documents: filtered, pagination: pag };
     },
-    [toast],
-  );
+    enabled: documentsOpen && documentPickerTab === "common",
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24,
+    placeholderData: keepPreviousData,
+  });
 
-  const loadClientPage = useCallback(
-    async (p: number) => {
-      setLoadingClient(true);
-      try {
-        const { documents: docs, pagination: pag } = await getClientDocuments(p);
-        setDocumentsClient(docs ?? []);
-        setPaginationClient(pag);
-      } catch (err) {
-        setPaginationClient(null);
-        toast({
-          title: "Could not load client documents",
-          description: err instanceof Error ? err.message : "Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoadingClient(false);
-      }
+  const clientDocsQuery = useQuery({
+    queryKey: ["community-documents", "client", pageClient],
+    queryFn: async () => {
+      const { documents: docs, pagination: pag } = await getClientDocuments(pageClient);
+      return { documents: docs ?? [], pagination: pag };
     },
-    [toast],
-  );
+    enabled: documentsOpen && documentPickerTab === "client",
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24,
+    placeholderData: keepPreviousData,
+  });
+
+  const documentsCommon = commonDocsQuery.data?.documents ?? [];
+  const paginationCommon = commonDocsQuery.data?.pagination ?? null;
+  const loadingCommon =
+    documentsOpen && documentPickerTab === "common" && commonDocsQuery.isPending;
+
+  const documentsClient = clientDocsQuery.data?.documents ?? [];
+  const paginationClient = clientDocsQuery.data?.pagination ?? null;
+  const loadingClient =
+    documentsOpen && documentPickerTab === "client" && clientDocsQuery.isPending;
 
   useEffect(() => {
-    if (!documentsOpen || documentPickerTab !== "common") return;
-    void loadCommonPage(pageCommon);
-  }, [documentsOpen, documentPickerTab, pageCommon, loadCommonPage]);
+    if (!commonDocsQuery.isError || !commonDocsQuery.error) return;
+    toast({
+      title: "Could not load common documents",
+      description:
+        commonDocsQuery.error instanceof Error
+          ? commonDocsQuery.error.message
+          : "Please try again.",
+      variant: "destructive",
+    });
+  }, [commonDocsQuery.isError, commonDocsQuery.error, toast]);
 
   useEffect(() => {
-    if (!documentsOpen || documentPickerTab !== "client") return;
-    void loadClientPage(pageClient);
-  }, [documentsOpen, documentPickerTab, pageClient, loadClientPage]);
+    if (!clientDocsQuery.isError || !clientDocsQuery.error) return;
+    toast({
+      title: "Could not load client documents",
+      description:
+        clientDocsQuery.error instanceof Error
+          ? clientDocsQuery.error.message
+          : "Please try again.",
+      variant: "destructive",
+    });
+  }, [clientDocsQuery.isError, clientDocsQuery.error, toast]);
 
   function openDocumentsPicker() {
     setDocumentPickerTab("common");
@@ -788,6 +867,11 @@ export default function CommunicationMessagesPage() {
     const trimmedSubject = subject.trim();
     if (!trimmedBody || !trimmedSubject || !communicationId) return;
     setSendError(null);
+    const bodyWithAttachments = formatMessageBodyWithAttachments(
+      trimmedBody,
+      selectedDocumentIds,
+      documentTitlesById,
+    );
     const payload: {
       communication_id: string;
       body: string;
@@ -795,7 +879,7 @@ export default function CommunicationMessagesPage() {
       document_ids?: string[];
     } = {
       communication_id: communicationId,
-      body: trimmedBody,
+      body: bodyWithAttachments,
       subject: trimmedSubject,
     };
     if (selectedDocumentIds.length > 0) {
@@ -868,25 +952,42 @@ export default function CommunicationMessagesPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[12rem]">
-                <DropdownMenuItem
-                  className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
-                  onSelect={() => {
-                    toast({
-                      title: "Video tour",
-                      description: "Send video link from your workflow when available.",
-                    });
-                  }}
-                >
-                  <div className="flex items-start gap-2">
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="h-auto cursor-pointer gap-2 py-2 pl-2 pr-1 [&>svg:last-child]:ml-0">
                     <Video className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div className="flex min-w-0 flex-col items-start gap-0">
+                    <div className="flex min-w-0 flex-1 flex-col items-start gap-0 text-left">
                       <span>Video tour</span>
-                      <span className="text-xs text-muted-foreground">
-                        Send a video tour
+                      <span className="text-xs font-normal text-muted-foreground">
+                        Choose a video
                       </span>
                     </div>
-                  </div>
-                </DropdownMenuItem>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent
+                    alignOffset={-4}
+                    className="min-w-[12rem]"
+                  >
+                    {VIDEO_TOUR_OPTIONS.map((opt) => (
+                      <DropdownMenuItem
+                        key={opt.id}
+                        onSelect={() => {
+                          setBody((prev) =>
+                            appendVideoTourLinkToBody(prev, opt.url),
+                          );
+                          toast({
+                            title: "Video link added",
+                            description:
+                              "The link was added to your message only (not opened in the browser).",
+                          });
+                          queueMicrotask(() => {
+                            composeBodyRef.current?.focus();
+                          });
+                        }}
+                      >
+                        {opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
                 <DropdownMenuItem
                   className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
                   onSelect={() => setInPersonTourOpen(true)}
@@ -1038,6 +1139,7 @@ export default function CommunicationMessagesPage() {
             <Paperclip className="h-4 w-4" />
           </Button>
           <Textarea
+            ref={composeBodyRef}
             placeholder="Write a message… (Ctrl+Enter to send)"
             value={body}
             onChange={(e) => setBody(e.target.value)}

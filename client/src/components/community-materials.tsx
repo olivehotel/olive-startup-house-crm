@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -247,6 +248,7 @@ function DocumentListPagination({
 }
 
 export function CommunityMaterials() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showAddForm, setShowAddForm] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -367,6 +369,7 @@ export function CommunityMaterials() {
 
       resetForm();
       toast({ title: "Material uploaded", description: `"${data.title}" has been sent.` });
+      void queryClient.invalidateQueries({ queryKey: ["community-documents"] });
       if (addAudience === "common") {
         if (pageCommon === 1) await loadCommonPage(1);
         else setPageCommon(1);
@@ -434,6 +437,7 @@ export function CommunityMaterials() {
       toast({ title: "Material updated", description: `"${editTitle.trim()}" has been saved.` });
       setEditingDoc(null);
       setEditFile(null);
+      void queryClient.invalidateQueries({ queryKey: ["community-documents"] });
       await refreshBothLists();
     } catch (err) {
       toast({
@@ -454,6 +458,7 @@ export function CommunityMaterials() {
       await deleteCommunityDocument(deletingDoc.id, deletingDoc.doc_type ?? "common");
       toast({ title: "Material deleted", description: `"${deletingDoc.title}" has been removed.` });
       setDeletingDoc(null);
+      void queryClient.invalidateQueries({ queryKey: ["community-documents"] });
       await refreshBothLists();
     } catch (err) {
       toast({
