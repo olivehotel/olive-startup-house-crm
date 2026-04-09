@@ -18,6 +18,7 @@ export const sendEmailMessage = (payload: {
   body: string;
   subject: string;
   document_ids?: string[];
+  is_invoice?: boolean;
 }) =>
   apiFetch<{ success: boolean }>("send-email-message", {
     method: "POST",
@@ -37,4 +38,10 @@ export const createCalendarEvent = (payload: CreateCalendarEventPayload) =>
   apiFetch<{ success?: boolean }>("create-calendar-event", {
     method: "POST",
     body: payload,
+  });
+
+export const createLeadFromCommunication = (communicationId: string) =>
+  apiFetch<{ lead_id?: string }>("create-lead-from-communication", {
+    method: "POST",
+    body: { communication_id: communicationId },
   });

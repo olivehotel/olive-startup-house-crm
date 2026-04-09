@@ -41,11 +41,11 @@ function resolveLeadStatus(raw: unknown): LeadStatus {
   return DEFAULT_STATUS;
 }
 
-/** Prefer `status_id`, then string `status`, then embedded relation `{ id, value }`. */
+/** Prefer `lead_status_id`, then `status_id`, then string `status`, then embedded relation `{ id, value }`. */
 function extractStatusCandidate(row: Record<string, unknown>): unknown {
-  const statusId = row.status_id;
-  if (statusId != null && statusId !== "") {
-    if (typeof statusId === "string") return statusId;
+  const leadStatusId = row.lead_status_id ?? row.status_id;
+  if (leadStatusId != null && leadStatusId !== "") {
+    if (typeof leadStatusId === "string") return leadStatusId;
   }
 
   const st = row.status;
@@ -126,6 +126,20 @@ export function mapSupabaseLeadRow(row: Record<string, unknown>): Lead {
     avatar: pickString(row, "avatar"),
     createdAt: pickCreatedAt(row),
   };
+}
+
+export async function fetchLeadByIdFromSupabase(leadId: string): Promise<Lead> {
+  const { data, error } = await supabase
+    .from("leads")
+    .select("*, status:lead_status_id ( id, value ), channel:channel_id ( id, value )")
+    .eq("id", leadId)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapSupabaseLeadRow(data as Record<string, unknown>);
 }
 
 export async function fetchLeadsFromSupabase(): Promise<Lead[]> {

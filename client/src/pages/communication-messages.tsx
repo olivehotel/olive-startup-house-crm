@@ -4,12 +4,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import {
   createCalendarEvent,
+  createLeadFromCommunication,
   getCommunicationMessages,
   sendEmailMessage,
 } from "@/actions/communications";
+import { fetchLeadByIdFromSupabase } from "@/lib/leads-supabase";
 import { getCommunityDocuments, getClientDocuments } from "@/actions/community";
 import { communicationChannels, communicationStatuses } from "@shared/schema";
 import type {
@@ -18,10 +20,11 @@ import type {
   CommunicationMessagesResponse,
   CommunityDocument,
   CommunityDocumentsPagination,
+  Lead,
 } from "@shared/schema";
 import { supabase } from "@/lib/supabase";
 import { downloadCommunityDocumentFromStorage } from "@/lib/community-document-storage";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,6 +66,7 @@ import {
   Send,
   Loader2,
   Receipt,
+  UserPlus,
   Video,
   X,
 } from "lucide-react";
@@ -686,6 +690,13 @@ export default function CommunicationMessagesPage() {
   const comm = data?.communication;
   const messages = data?.messages ?? [];
 
+  const leadId = comm?.lead_id ?? undefined;
+  const { data: linkedLead, isLoading: leadLoading } = useQuery<Lead>({
+    queryKey: ["communication-lead", communicationId, leadId],
+    queryFn: () => fetchLeadByIdFromSupabase(leadId!),
+    enabled: Boolean(communicationId && leadId),
+  });
+
   const sortedMessages = [...messages].sort(
     (a, b) =>
       new Date(a.received_at).getTime() - new Date(b.received_at).getTime(),
@@ -895,6 +906,32 @@ export default function CommunicationMessagesPage() {
     },
   });
 
+  const createLeadMutation = useMutation({
+    mutationFn: () => createLeadFromCommunication(communicationId!),
+    onSuccess: async (res) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["communication-messages", communicationId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["communications"] });
+      if (res?.lead_id) {
+        await queryClient.invalidateQueries({
+          queryKey: ["communication-lead", communicationId, res.lead_id],
+        });
+      }
+      toast({
+        title: "Lead created",
+        description: "This contact is now a lead.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Could not create lead",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   function handleSubmitInPersonTour(e: React.FormEvent) {
     e.preventDefault();
     if (!communicationId) return;
@@ -973,15 +1010,20 @@ export default function CommunicationMessagesPage() {
       selectedDocumentIds,
       documentTitlesById,
     );
+    const isInvoice = INVOICE_PAYMENT_OPTIONS.some((opt) =>
+      bodyWithAttachments.includes(opt.content),
+    );
     const payload: {
       communication_id: string;
       body: string;
       subject: string;
       document_ids?: string[];
+      is_invoice?: boolean;
     } = {
       communication_id: communicationId,
       body: bodyWithAttachments,
       subject: trimmedSubject,
+      is_invoice: isInvoice,
     };
     if (selectedDocumentIds.length > 0) {
       payload.document_ids = selectedDocumentIds;
@@ -1036,11 +1078,47 @@ export default function CommunicationMessagesPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">{comm.contact_email}</p>
+            {comm.lead_id && (
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {leadLoading ? (
+                  <Skeleton className="h-5 w-36" />
+                ) : linkedLead ? (
+                  <Link
+                    href="/leads"
+                    className={cn(
+                      badgeVariants({ variant: "outline" }),
+                      "text-xs font-normal gap-1 inline-flex items-center font-semibold",
+                    )}
+                  >
+                    Lead: {linkedLead.name}
+                    <span className="text-muted-foreground font-normal">· {linkedLead.status}</span>
+                  </Link>
+                ) : null}
+              </div>
+            )}
           </div>
         ) : null}
 
         {comm && (
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center gap-2">
+            {!comm.lead_id && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1 shrink-0"
+                disabled={createLeadMutation.isPending}
+                onClick={() => createLeadMutation.mutate()}
+                data-testid="button-made-to-lead"
+              >
+                {createLeadMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserPlus className="h-4 w-4" />
+                )}
+                Made to lead
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

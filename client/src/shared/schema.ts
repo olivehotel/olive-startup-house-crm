@@ -455,6 +455,8 @@ export interface CommunicationDetail {
   status_id: CommunicationStatusId;
   channel_id: CommunicationChannelId;
   main_mail?: string;
+  /** Set when this communication is linked to a CRM lead */
+  lead_id?: string | null;
 }
 
 export interface CommunicationMessagesResponse {
