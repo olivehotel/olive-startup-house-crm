@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { LeadCard } from "@/components/lead-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AddLeadDialog } from "@/components/add-lead-dialog";
 import { fetchLeadsFromSupabase, LEADS_QUERY_KEY } from "@/lib/leads-supabase";
 import {
   Select,
@@ -15,72 +16,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { createLead, createLeadBodySchema } from "@/actions/leads";
-import { Plus, Search, Filter, TrendingUp, Users, Target, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { Plus, Search, Filter, TrendingUp, Users, Target, CheckCircle, AlertCircle } from "lucide-react";
+import { useState } from "react";
 import type { Lead } from "@shared/schema";
 
-const emptyLeadForm = { name: "", email: "", phone: "", location: "" };
-
 export default function LeadsPage() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [statusTab, setStatusTab] = useState("all");
-  const [addLeadOpen, setAddLeadOpen] = useState(false);
-  const [leadForm, setLeadForm] = useState(emptyLeadForm);
-
-  const createLeadMutation = useMutation({
-    mutationFn: createLead,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: LEADS_QUERY_KEY });
-      setLeadForm(emptyLeadForm);
-      setAddLeadOpen(false);
-      toast({
-        title: "Lead created",
-        description: "The new lead has been added to your pipeline.",
-      });
-    },
-    onError: (err: Error) => {
-      toast({
-        title: "Could not create lead",
-        description: err.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  function handleAddLeadOpenChange(open: boolean) {
-    setAddLeadOpen(open);
-    if (!open) setLeadForm(emptyLeadForm);
-  }
-
-  function handleSubmitLead(e: FormEvent) {
-    e.preventDefault();
-    const body = {
-      name: leadForm.name.trim(),
-      email: leadForm.email.trim(),
-      phone: leadForm.phone.trim(),
-      location: leadForm.location.trim(),
-    };
-    const parsed = createLeadBodySchema.safeParse(body);
-    if (!parsed.success) {
-      const first = parsed.error.issues[0]?.message ?? "Check the form fields.";
-      toast({ title: "Invalid input", description: first, variant: "destructive" });
-      return;
-    }
-    createLeadMutation.mutate(parsed.data);
-  }
 
   const { data: leads, isLoading, isError, error } = useQuery<Lead[]>({
     queryKey: LEADS_QUERY_KEY,
@@ -115,87 +58,13 @@ export default function LeadsPage() {
           <h1 className="text-2xl font-bold">Lead Pipeline</h1>
           <p className="text-muted-foreground">Manage and track all incoming leads from various sources</p>
         </div>
-        <Button
-          type="button"
-          data-testid="button-add-lead"
-          onClick={() => setAddLeadOpen(true)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add New Lead
-        </Button>
+        <AddLeadDialog>
+          <Button type="button" data-testid="button-add-lead">
+            <Plus className="h-4 w-4 mr-2" />
+            Add New Lead
+          </Button>
+        </AddLeadDialog>
       </div>
-
-      <Dialog open={addLeadOpen} onOpenChange={handleAddLeadOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add new lead</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmitLead} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="lead-name">Name</Label>
-              <Input
-                id="lead-name"
-                value={leadForm.name}
-                onChange={(e) => setLeadForm((f) => ({ ...f, name: e.target.value }))}
-                autoComplete="name"
-                disabled={createLeadMutation.isPending}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lead-email">Email</Label>
-              <Input
-                id="lead-email"
-                type="email"
-                value={leadForm.email}
-                onChange={(e) => setLeadForm((f) => ({ ...f, email: e.target.value }))}
-                autoComplete="email"
-                disabled={createLeadMutation.isPending}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lead-phone">Phone</Label>
-              <Input
-                id="lead-phone"
-                type="tel"
-                value={leadForm.phone}
-                onChange={(e) => setLeadForm((f) => ({ ...f, phone: e.target.value }))}
-                autoComplete="tel"
-                disabled={createLeadMutation.isPending}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lead-location">Location</Label>
-              <Input
-                id="lead-location"
-                value={leadForm.location}
-                onChange={(e) => setLeadForm((f) => ({ ...f, location: e.target.value }))}
-                autoComplete="address-level2"
-                disabled={createLeadMutation.isPending}
-              />
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleAddLeadOpenChange(false)}
-                disabled={createLeadMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createLeadMutation.isPending}>
-                {createLeadMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating…
-                  </>
-                ) : (
-                  "Create lead"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {isError && (
         <Alert variant="destructive">

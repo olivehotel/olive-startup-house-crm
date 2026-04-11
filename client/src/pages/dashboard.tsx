@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AddLeadDialog } from "@/components/add-lead-dialog";
 import { StatCard } from "@/components/stat-card";
 import { LeadCard } from "@/components/lead-card";
 import { CommunicationCard } from "@/components/communication-card";
@@ -273,10 +274,12 @@ export default function Dashboard() {
                   Open Platform
                 </Link>
               </Button>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                Add Lead
-              </Button>
+              <AddLeadDialog>
+                <Button size="sm" type="button" data-testid="button-dashboard-add-lead">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Lead
+                </Button>
+              </AddLeadDialog>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
