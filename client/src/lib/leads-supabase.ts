@@ -113,6 +113,8 @@ export function mapSupabaseLeadRow(row: Record<string, unknown>): Lead {
     name,
     email,
     phone: pickString(row, "phone"),
+    location: pickString(row, "location"),
+    message_text: pickString(row, "message_text", "message"),
     source,
     status,
     budget: pickNumber(row, "budget"),
