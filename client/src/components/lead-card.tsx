@@ -1,13 +1,12 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { LEADS_QUERY_KEY, updateLeadStatus } from "@/lib/leads-supabase";
 import { cn } from "@/lib/utils";
-import { getLeadStatusId, type Lead } from "@shared/schema";
+import type { Lead } from "@shared/schema";
 import { LEAD_STATUS_BADGE_CLASSES } from "@/lib/lead-status-badge-classes";
-import { Loader2 } from "lucide-react";
+import {
+  LeadPaymentPendingButton,
+  leadShowsPaymentPendingSlot,
+} from "@/components/lead-payment-pending-button";
 
 interface LeadCardProps {
   lead: Lead;
@@ -25,40 +24,17 @@ const sourceIcons: Record<string, string> = {
 };
 
 export function LeadCard({ lead, onClick }: LeadCardProps) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ leadId, statusId }: { leadId: string; statusId: string }) =>
-      updateLeadStatus(leadId, statusId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: LEADS_QUERY_KEY });
-      toast({
-        title: "Status updated",
-        description: "Lead status has been updated.",
-      });
-    },
-    onError: (err: Error) => {
-      toast({
-        title: "Could not update status",
-        description: err.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const convertedId = getLeadStatusId("Converted");
-  const hidePaymentPendingAction =
-    lead.status === "Converted" || lead.status === "Lost";
-  const canClickPaymentPending =
-    (lead.status === "Qualified" || lead.status === "Payment Pending") &&
-    Boolean(convertedId);
-
-  const initials = lead.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+  const displayName = lead.name.trim();
+  const initials =
+    displayName && displayName !== "Unknown"
+      ? displayName
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2) || "?"
+      : "?";
 
   const formatBudget = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -115,35 +91,12 @@ export function LeadCard({ lead, onClick }: LeadCardProps) {
         </div>
       </div>
 
-      {!hidePaymentPendingAction ? (
+      {leadShowsPaymentPendingSlot(lead) ? (
         <div
           className="flex shrink-0 gap-1 justify-end"
           onClick={(e) => e.stopPropagation()}
         >
-          <Button
-            type="button"
-            variant={
-              canClickPaymentPending && !updateStatusMutation.isPending
-                ? "default"
-                : "outline"
-            }
-            size="sm"
-            className="text-xs h-8 gap-1"
-            disabled={!canClickPaymentPending || updateStatusMutation.isPending}
-            onClick={() => {
-              if (!convertedId) return;
-              updateStatusMutation.mutate({
-                leadId: lead.id,
-                statusId: convertedId,
-              });
-            }}
-          >
-            {updateStatusMutation.isPending &&
-            updateStatusMutation.variables?.statusId === convertedId ? (
-              <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-            ) : null}
-            Payment pending
-          </Button>
+          <LeadPaymentPendingButton lead={lead} whenHidden="hidden" />
         </div>
       ) : null}
     </div>

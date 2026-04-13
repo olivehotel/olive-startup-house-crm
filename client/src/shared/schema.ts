@@ -52,6 +52,8 @@ export interface Lead {
   name: string;
   email: string;
   phone?: string;
+  location?: string;
+  message_text?: string;
   source: LeadSource;
   status: LeadStatus;
   budget: number;

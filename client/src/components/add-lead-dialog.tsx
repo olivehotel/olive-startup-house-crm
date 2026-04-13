@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,13 @@ import { LEADS_QUERY_KEY } from "@/lib/leads-supabase";
 import { Loader2 } from "lucide-react";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 
-const emptyLeadForm = { name: "", email: "", phone: "", location: "" };
+const emptyLeadForm = {
+  name: "",
+  email: "",
+  phone: "",
+  location: "",
+  message_text: "",
+};
 
 type AddLeadDialogProps = {
   children: ReactNode;
@@ -30,6 +37,7 @@ export function AddLeadDialog({ children }: AddLeadDialogProps) {
   const emailId = `${baseId}-email`;
   const phoneId = `${baseId}-phone`;
   const locationId = `${baseId}-location`;
+  const messageId = `${baseId}-message`;
 
   const [open, setOpen] = useState(false);
   const [leadForm, setLeadForm] = useState(emptyLeadForm);
@@ -62,10 +70,11 @@ export function AddLeadDialog({ children }: AddLeadDialogProps) {
   function handleSubmitLead(e: FormEvent) {
     e.preventDefault();
     const body = {
-      name: leadForm.name.trim(),
-      email: leadForm.email.trim(),
-      phone: leadForm.phone.trim(),
-      location: leadForm.location.trim(),
+      name: leadForm.name,
+      email: leadForm.email,
+      phone: leadForm.phone,
+      location: leadForm.location,
+      message_text: leadForm.message_text,
     };
     const parsed = createLeadBodySchema.safeParse(body);
     if (!parsed.success) {
@@ -79,7 +88,7 @@ export function AddLeadDialog({ children }: AddLeadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add new lead</DialogTitle>
         </DialogHeader>
@@ -116,14 +125,26 @@ export function AddLeadDialog({ children }: AddLeadDialogProps) {
               disabled={createLeadMutation.isPending}
             />
           </div>
+          <p className="text-xs text-muted-foreground">Email or phone is required.</p>
           <div className="space-y-2">
             <Label htmlFor={locationId}>Location</Label>
             <Input
               id={locationId}
               value={leadForm.location}
               onChange={(e) => setLeadForm((f) => ({ ...f, location: e.target.value }))}
-              autoComplete="address-level2"
+              autoComplete="street-address"
               disabled={createLeadMutation.isPending}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={messageId}>Message</Label>
+            <Textarea
+              id={messageId}
+              value={leadForm.message_text}
+              onChange={(e) => setLeadForm((f) => ({ ...f, message_text: e.target.value }))}
+              rows={3}
+              disabled={createLeadMutation.isPending}
+              className="resize-y min-h-[72px]"
             />
           </div>
           <DialogFooter>

@@ -6,7 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AddLeadDialog } from "@/components/add-lead-dialog";
 import { StatCard } from "@/components/stat-card";
-import { LeadCard } from "@/components/lead-card";
+import {
+  LeadsPipelineResponsive,
+  LeadsPipelineSkeletons,
+} from "@/components/leads-mobile-stack";
 import { CommunicationCard } from "@/components/communication-card";
 import { ScreeningCard } from "@/components/screening-card";
 import { OnboardingCard } from "@/components/onboarding-card";
@@ -291,31 +294,65 @@ export default function Dashboard() {
                 <TabsTrigger value="contacted">Contacted {leads?.filter(l => l.status === "Contacted").length || 0}</TabsTrigger>
                 <TabsTrigger value="qualified">Qualified {leads?.filter(l => l.status === "Qualified").length || 0}</TabsTrigger>
               </TabsList>
-              <TabsContent value="all" className="mt-4 space-y-2">
+              <TabsContent value="all" className="mt-4">
                 {leadsLoading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-16 w-full rounded-md" />
-                  ))
+                  <LeadsPipelineSkeletons tableRows={4} mobileRows={4} />
+                ) : (leads?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">No leads yet.</p>
                 ) : (
-                  leads?.slice(0, 5).map((lead) => (
-                    <LeadCard key={lead.id} lead={lead} />
-                  ))
+                  <LeadsPipelineResponsive
+                    leads={(leads ?? []).slice(0, 5)}
+                    variant="embedded"
+                  />
                 )}
               </TabsContent>
-              <TabsContent value="new" className="mt-4 space-y-2">
-                {leads?.filter(l => l.status === "New").slice(0, 5).map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} />
-                ))}
+              <TabsContent value="new" className="mt-4">
+                {leadsLoading ? (
+                  <LeadsPipelineSkeletons tableRows={4} mobileRows={4} />
+                ) : (() => {
+                    const rows = (leads ?? [])
+                      .filter((l) => l.status === "New")
+                      .slice(0, 5);
+                    return rows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2">
+                        No leads in this stage.
+                      </p>
+                    ) : (
+                      <LeadsPipelineResponsive leads={rows} variant="embedded" />
+                    );
+                  })()}
               </TabsContent>
-              <TabsContent value="contacted" className="mt-4 space-y-2">
-                {leads?.filter(l => l.status === "Contacted").slice(0, 5).map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} />
-                ))}
+              <TabsContent value="contacted" className="mt-4">
+                {leadsLoading ? (
+                  <LeadsPipelineSkeletons tableRows={4} mobileRows={4} />
+                ) : (() => {
+                    const rows = (leads ?? [])
+                      .filter((l) => l.status === "Contacted")
+                      .slice(0, 5);
+                    return rows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2">
+                        No leads in this stage.
+                      </p>
+                    ) : (
+                      <LeadsPipelineResponsive leads={rows} variant="embedded" />
+                    );
+                  })()}
               </TabsContent>
-              <TabsContent value="qualified" className="mt-4 space-y-2">
-                {leads?.filter(l => l.status === "Qualified").slice(0, 5).map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} />
-                ))}
+              <TabsContent value="qualified" className="mt-4">
+                {leadsLoading ? (
+                  <LeadsPipelineSkeletons tableRows={4} mobileRows={4} />
+                ) : (() => {
+                    const rows = (leads ?? [])
+                      .filter((l) => l.status === "Qualified")
+                      .slice(0, 5);
+                    return rows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2">
+                        No leads in this stage.
+                      </p>
+                    ) : (
+                      <LeadsPipelineResponsive leads={rows} variant="embedded" />
+                    );
+                  })()}
               </TabsContent>
             </Tabs>
 
