@@ -1,0 +1,498 @@
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  addMonths,
+  addWeeks,
+  eachDayOfInterval,
+  endOfDay,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameDay,
+  isWeekend,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns";
+import { ChevronLeft, ChevronRight, ChevronsDownUp } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
+import {
+  CHECKERBOARD_QUERY_KEY,
+  type CheckerboardBed,
+  type CheckerboardBooking,
+  type CheckerboardLocation,
+  type CheckerboardRoomGroup,
+  fetchCheckerboard,
+} from "@/lib/checkerboard-api";
+
+type ViewMode = "week" | "month" | "3month";
+
+const LABEL_W = 240;
+const MIN_DAY_PX = 36;
+
+function viewRange(anchor: Date, mode: ViewMode): { from: Date; to: Date } {
+  if (mode === "week") {
+    const from = startOfWeek(anchor, { weekStartsOn: 1 });
+    const to = endOfWeek(anchor, { weekStartsOn: 1 });
+    return { from, to };
+  }
+  if (mode === "month") {
+    return { from: startOfMonth(anchor), to: endOfMonth(anchor) };
+  }
+  return {
+    from: startOfMonth(anchor),
+    to: endOfMonth(addMonths(anchor, 2)),
+  };
+}
+
+function navigateAnchor(anchor: Date, mode: ViewMode, dir: -1 | 1): Date {
+  if (mode === "week") return addWeeks(anchor, dir);
+  if (mode === "month") return addMonths(anchor, dir);
+  return addMonths(anchor, dir * 3);
+}
+
+function formatRangeTitle(anchor: Date, mode: ViewMode): string {
+  if (mode === "week") {
+    const from = startOfWeek(anchor, { weekStartsOn: 1 });
+    const to = endOfWeek(anchor, { weekStartsOn: 1 });
+    return `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`;
+  }
+  if (mode === "month") {
+    return format(anchor, "MMMM yyyy");
+  }
+  const from = startOfMonth(anchor);
+  const to = endOfMonth(addMonths(anchor, 2));
+  return `${format(from, "MMM yyyy")} – ${format(to, "MMM yyyy")}`;
+}
+
+function overlapsCalendarDay(booking: CheckerboardBooking, day: Date): boolean {
+  const ds = startOfDay(day);
+  const de = endOfDay(day);
+  return booking.start <= de && booking.end >= ds;
+}
+
+function occupancyForDay(
+  beds: CheckerboardBed[],
+  day: Date,
+): { occupied: number; total: number } {
+  const total = beds.length;
+  if (total === 0) return { occupied: 0, total: 0 };
+  const occupied = beds.filter((bed) =>
+    bed.bookings.some((b) => overlapsCalendarDay(b, day)),
+  ).length;
+  return { occupied, total };
+}
+
+function bookingSpanInView(
+  booking: CheckerboardBooking,
+  days: Date[],
+): { startI: number; endI: number } | null {
+  let startI = -1;
+  let endI = -1;
+  days.forEach((d, i) => {
+    if (overlapsCalendarDay(booking, d)) {
+      if (startI === -1) startI = i;
+      endI = i;
+    }
+  });
+  if (startI === -1) return null;
+  return { startI, endI };
+}
+
+function bedHasActiveBookingInRange(bed: CheckerboardBed, days: Date[]): boolean {
+  return bed.bookings.some((b) => days.some((d) => overlapsCalendarDay(b, d)));
+}
+
+export function EcoSmartCheckerboard() {
+  const [anchor, setAnchor] = useState(() => new Date());
+  const [view, setView] = useState<ViewMode>("month");
+  const [location, setLocation] = useState<CheckerboardLocation>("mp");
+
+  const { from, to } = useMemo(() => viewRange(anchor, view), [anchor, view]);
+  const days = useMemo(
+    () => eachDayOfInterval({ start: from, end: to }),
+    [from, to],
+  );
+  const numDays = days.length;
+
+  const today = new Date();
+  const todayIndex = days.findIndex((d) => isSameDay(d, today));
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: [CHECKERBOARD_QUERY_KEY, location, from.toISOString(), to.toISOString()],
+    queryFn: () =>
+      fetchCheckerboard({
+        location,
+        fromDate: from,
+        toDate: to,
+      }),
+    staleTime: 120_000,
+  });
+
+  const gridTemplate = useMemo(
+    () => `${LABEL_W}px repeat(${numDays}, minmax(${MIN_DAY_PX}px, 1fr))`,
+    [numDays],
+  );
+
+  const minTableWidth = LABEL_W + numDays * MIN_DAY_PX;
+
+  return (
+    <Card className="overflow-hidden border-border">
+      <CardContent className="p-0">
+        <div className="flex flex-col gap-3 p-4 border-b border-border bg-muted/20">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => setAnchor((a) => navigateAnchor(a, view, -1))}
+                aria-label="Previous period"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-[200px] text-center text-sm font-semibold tabular-nums">
+                {formatRangeTitle(anchor, view)}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => setAnchor((a) => navigateAnchor(a, view, 1))}
+                aria-label="Next period"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground"
+                onClick={() => setAnchor(new Date())}
+              >
+                Today
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <ToggleGroup
+                type="single"
+                value={view}
+                onValueChange={(v) => v && setView(v as ViewMode)}
+                variant="outline"
+                size="sm"
+                className="justify-end"
+              >
+                <ToggleGroupItem value="week" aria-label="Week view">
+                  WEEK
+                </ToggleGroupItem>
+                <ToggleGroupItem value="month" aria-label="Month view">
+                  MONTH
+                </ToggleGroupItem>
+                <ToggleGroupItem value="3month" aria-label="Three month view">
+                  3 MONTHS
+                </ToggleGroupItem>
+              </ToggleGroup>
+
+              <ToggleGroup
+                type="single"
+                value={location}
+                onValueChange={(v) => v && setLocation(v as CheckerboardLocation)}
+                variant="outline"
+                size="sm"
+              >
+                <ToggleGroupItem value="mp" aria-label="Menlo Park">
+                  MP
+                </ToggleGroupItem>
+                <ToggleGroupItem value="pa" aria-label="Palo Alto">
+                  PA
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          </div>
+        </div>
+
+        {error ? (
+          <div className="p-8 text-center text-sm text-destructive">
+            {String((error as Error).message).includes("401") ||
+            String((error as Error).message).includes("403")
+              ? "Unable to load checkerboard (sign in or check permissions)."
+              : `Could not load checkerboard: ${(error as Error).message}`}
+          </div>
+        ) : (
+          <div className="overflow-x-auto overflow-y-visible overscroll-x-contain">
+            <div style={{ minWidth: minTableWidth }}>
+              {/* Header */}
+              <div
+                className="grid border-b border-border bg-background"
+                style={{ gridTemplateColumns: gridTemplate }}
+              >
+                <div
+                  className="sticky left-0 z-20 flex items-end border-r border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground"
+                  style={{ width: LABEL_W, minWidth: LABEL_W }}
+                >
+                  Rooms
+                </div>
+                {days.map((d) => {
+                  const weekend = isWeekend(d);
+                  const isToday = todayIndex >= 0 && isSameDay(d, today);
+                  return (
+                    <div
+                      key={d.toISOString()}
+                      className={cn(
+                        "border-l border-border/60 px-0.5 py-2 text-center text-[11px] leading-tight",
+                        weekend && "bg-muted/40",
+                        isToday && "bg-primary/10",
+                      )}
+                    >
+                      <div className="flex flex-col items-center gap-0.5">
+                        {isToday && (
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-primary"
+                            aria-hidden
+                          />
+                        )}
+                        <div
+                          className={cn(
+                            "font-semibold tabular-nums",
+                            isToday && "text-primary",
+                          )}
+                        >
+                          {format(d, "d")}
+                        </div>
+                        <div className="text-[10px] uppercase text-muted-foreground">
+                          {format(d, "EEE")}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {isLoading ? (
+                <div className="space-y-2 p-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : !data?.rooms.length ? (
+                <div className="space-y-2 p-8 text-center text-sm text-muted-foreground max-w-md mx-auto">
+                  <p className="font-medium text-foreground">No rooms for this period</p>
+                  <p>
+                    Try another location (MP or PA), move to a different week or month, or widen the
+                    date range. If you expect data here, the API response shape may not match the
+                    app (check the Network tab in dev tools).
+                  </p>
+                  {import.meta.env.DEV && (
+                    <p className="text-xs text-muted-foreground/90 pt-2">
+                      Dev: console may list top-level JSON keys from the last response.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="relative">
+                  {data.rooms.map((room) => (
+                    <RoomBlock
+                      key={room.id}
+                      room={room}
+                      days={days}
+                      gridTemplate={gridTemplate}
+                      todayIndex={todayIndex}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RoomBlock({
+  room,
+  days,
+  gridTemplate,
+  todayIndex,
+}: {
+  room: CheckerboardRoomGroup;
+  days: Date[];
+  gridTemplate: string;
+  todayIndex: number;
+}) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="grid border-b border-border" style={{ gridTemplateColumns: gridTemplate }}>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="sticky left-0 z-20 flex items-center gap-2 border-r border-border bg-muted/30 px-2 py-2 text-left text-sm font-medium hover:bg-muted/50"
+            style={{ width: LABEL_W, minWidth: LABEL_W }}
+          >
+            <ChevronsDownUp
+              className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")}
+            />
+            <span className="truncate">{room.title}</span>
+          </button>
+        </CollapsibleTrigger>
+        {days.map((d) => {
+          const { occupied, total } = occupancyForDay(room.beds, d);
+          const weekend = isWeekend(d);
+          return (
+            <div
+              key={`h-${room.id}-${d.toISOString()}`}
+              className={cn(
+                "flex items-center justify-center border-l border-border/60 py-2 text-[11px] tabular-nums",
+                weekend && "bg-muted/40",
+              )}
+            >
+              <span className="text-muted-foreground">
+                {total === 0 ? "—" : `${occupied}/${total}`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <CollapsibleContent>
+        {room.beds.map((bed) => (
+          <BedRow
+            key={bed.id}
+            bed={bed}
+            days={days}
+            gridTemplate={gridTemplate}
+            todayIndex={todayIndex}
+          />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function BedRow({
+  bed,
+  days,
+  gridTemplate,
+  todayIndex,
+}: {
+  bed: CheckerboardBed;
+  days: Date[];
+  gridTemplate: string;
+  todayIndex: number;
+}) {
+  const activeInView = bedHasActiveBookingInRange(bed, days);
+  const occupied =
+    typeof bed.occupied === "boolean" ? bed.occupied : activeInView;
+
+  return (
+    <div
+      className="grid border-b border-border/80"
+      style={{ gridTemplateColumns: gridTemplate }}
+    >
+      <div
+        className="sticky left-0 z-20 flex items-center gap-2 border-r border-border bg-background px-3 py-1.5 text-sm"
+        style={{ width: LABEL_W, minWidth: LABEL_W }}
+      >
+        <span
+          className={cn(
+            "inline-block h-2 w-2 shrink-0 rounded-full",
+            occupied ? "bg-emerald-500" : "bg-muted-foreground/30",
+          )}
+          aria-hidden
+        />
+        <span className="truncate text-muted-foreground">{bed.name}</span>
+      </div>
+
+      <div className="relative min-h-[40px]" style={{ gridColumn: "2 / -1" }}>
+        <TimelineInner days={days} bookings={bed.bookings} todayIndex={todayIndex} />
+      </div>
+    </div>
+  );
+}
+
+function TimelineInner({
+  days,
+  bookings,
+  todayIndex,
+}: {
+  days: Date[];
+  bookings: CheckerboardBooking[];
+  todayIndex: number;
+}) {
+  const numDays = days.length;
+
+  return (
+    <div
+      className="relative grid h-full min-h-[40px]"
+      style={{
+        gridTemplateColumns: `repeat(${numDays}, minmax(${MIN_DAY_PX}px, 1fr))`,
+      }}
+    >
+      {days.map((d) => {
+        const weekend = isWeekend(d);
+        return (
+          <div
+            key={d.toISOString()}
+            className={cn("border-l border-border/50", weekend && "bg-muted/25")}
+          />
+        );
+      })}
+
+      {todayIndex >= 0 && (
+        <div
+          className="pointer-events-none absolute bottom-0 top-0 z-[11] w-px bg-primary shadow-[0_0_0_1px_hsl(var(--background))]"
+          style={{
+            left: `calc(${(todayIndex + 0.5) / numDays} * 100%)`,
+          }}
+        />
+      )}
+
+      <div className="pointer-events-none absolute inset-0 z-[12] px-0.5 py-1">
+        {bookings.map((b) => {
+          const span = bookingSpanInView(b, days);
+          if (!span) return null;
+          const { startI, endI } = span;
+          const left = (startI / numDays) * 100;
+          const width = ((endI - startI + 1) / numDays) * 100;
+          const isPending = b.variant === "pending";
+          return (
+            <div
+              key={b.id}
+              title={
+                b.tariffSummary
+                  ? `${b.guestName} — ${b.tariffSummary}`
+                  : b.guestName
+              }
+              className={cn(
+                "absolute top-1 flex h-7 max-w-full items-center overflow-hidden rounded-md px-1.5 text-[10px] font-medium leading-tight text-white shadow-sm",
+                isPending ? "bg-amber-500/90" : "bg-emerald-600/90",
+              )}
+              style={{
+                left: `${left}%`,
+                width: `${width}%`,
+                minWidth: 4,
+              }}
+            >
+              <span className="truncate">{b.guestName}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
