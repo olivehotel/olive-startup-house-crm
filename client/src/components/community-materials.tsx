@@ -67,7 +67,7 @@ import {
 const LINK_TYPE_ID: MaterialTypeId = materialTypeIds.link;
 const DOCUMENT_TYPE_ID: MaterialTypeId = materialTypeIds.document;
 
-const materialTypeConfig: Record<MaterialTypeId, { label: string; icon: React.ElementType; color: string }> = {
+const materialTypeConfig = {
   [materialTypeIds.document]: { label: "Document", icon: FileText,    color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
   [materialTypeIds.slide]:    { label: "Slide",    icon: Presentation, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
   [materialTypeIds.tip]:      { label: "Tip",      icon: Lightbulb,    color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
@@ -75,9 +75,9 @@ const materialTypeConfig: Record<MaterialTypeId, { label: string; icon: React.El
   [materialTypeIds.guide]:    { label: "Guide",    icon: BookMarked,   color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
   [materialTypeIds.rule]:     { label: "Rule",     icon: BookOpen,     color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
   [materialTypeIds.link]:     { label: "Link",     icon: Link2,        color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400" },
-};
+} as unknown as Record<MaterialTypeId, { label: string; icon: React.ElementType; color: string }>;
 
-const acceptByType: Record<MaterialTypeId, string> = {
+const acceptByType = {
   [materialTypeIds.document]: ".pdf,.doc,.docx,.xls,.xlsx,.xml",
   [materialTypeIds.slide]:    ".jpg,.jpeg,.png,.webp,.gif,.ppt,.pptx",
   [materialTypeIds.tip]:      ".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx",
@@ -85,7 +85,7 @@ const acceptByType: Record<MaterialTypeId, string> = {
   [materialTypeIds.guide]:    ".pdf,.doc,.docx",
   [materialTypeIds.rule]:     ".pdf,.doc,.docx,.xls,.xlsx,.xml",
   [materialTypeIds.link]:     "",
-};
+} as unknown as Record<MaterialTypeId, string>;
 
 function materialRowConfig(doc: CommunityDocument) {
   if (doc.type_id && materialTypeConfig[doc.type_id]) {
