@@ -15,6 +15,12 @@ export type CheckerboardBooking = {
   variant: "confirmed" | "pending";
   /** e.g. "$910 USD" from Air `computedSumToPay` */
   tariffSummary?: string;
+  /** Raw or API status label when present (e.g. "Checked In") */
+  statusLabel?: string;
+  phone?: string;
+  guestCount?: number;
+  paidSummary?: string;
+  debtSummary?: string;
 };
 
 export type CheckerboardBed = {
@@ -66,7 +72,11 @@ function bookingVariantFromStatus(raw: unknown): "confirmed" | "pending" {
     s.includes("pending") ||
     s.includes("hold") ||
     s.includes("request") ||
-    s.includes("tentative")
+    s.includes("tentative") ||
+    s.includes("created") ||
+    s === "create" ||
+    s.includes("_create") ||
+    s.includes("create_")
   ) {
     return "pending";
   }
@@ -97,6 +107,67 @@ function extractTariffSummary(o: Record<string, unknown>): string | undefined {
   if (sym) return `${sym}${value}`;
   const code = pickString(first, ["currencyTitle"]) ?? pickString(cur ?? {}, ["title"]);
   return code ? `${value} ${code}` : String(value);
+}
+
+function pickGuestCount(o: Record<string, unknown>): number | undefined {
+  const keys = ["guestsCount", "numberOfGuests", "guestCount", "guests", "guestNumber"];
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.floor(v);
+  }
+  return undefined;
+}
+
+function pickMoneyString(o: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      return String(v);
+    }
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
+/**
+ * Optional fields for hover card / detail UI; safe to omit when API shape differs.
+ */
+function extractBookingDetailFields(
+  o: Record<string, unknown>,
+  rep: Record<string, unknown> | null,
+  computed: Record<string, unknown> | null,
+  statusFallback: string | undefined,
+): Pick<
+  CheckerboardBooking,
+  "statusLabel" | "phone" | "guestCount" | "paidSummary" | "debtSummary"
+> {
+  const statusLabel =
+    (typeof computed?.status === "string" ? computed.status : undefined) ??
+    statusFallback ??
+    undefined;
+
+  const phone =
+    pickString(rep ?? {}, ["phone", "mobilePhone", "mobile", "tel"]) ??
+    pickString(o, ["phone", "guestPhone", "guest_phone"]);
+
+  const guestCount = pickGuestCount(o);
+
+  const paidSummary =
+    pickMoneyString(o, ["paidAmount", "paid", "sumPaid", "computedPaid"]) ?? undefined;
+
+  const debtSummary =
+    pickMoneyString(o, ["debt", "debtAmount", "balanceDue", "computedDebt"]) ?? undefined;
+
+  const out: Pick<
+    CheckerboardBooking,
+    "statusLabel" | "phone" | "guestCount" | "paidSummary" | "debtSummary"
+  > = {};
+  if (statusLabel) out.statusLabel = statusLabel;
+  if (phone) out.phone = phone;
+  if (guestCount != null) out.guestCount = guestCount;
+  if (paidSummary) out.paidSummary = paidSummary;
+  if (debtSummary) out.debtSummary = debtSummary;
+  return out;
 }
 
 /**
@@ -198,12 +269,15 @@ function normalizeAirBookingSegment(o: Record<string, unknown>, index: number): 
   const lo = start <= end ? start : end;
   const hi = start <= end ? end : start;
 
+  const extras = extractBookingDetailFields(o, rep, computed, statusStr);
+
   return {
     id,
     guestName,
     start: lo,
     end: hi,
     variant,
+    ...extras,
     ...(tariffSummary ? { tariffSummary } : {}),
   };
 }
@@ -321,12 +395,15 @@ function normalizeBooking(raw: unknown, index: number): CheckerboardBooking | nu
   const lo = start <= end ? start : end;
   const hi = start <= end ? end : start;
 
+  const extras = extractBookingDetailFields(o, rep, computed, statusRaw);
+
   return {
     id,
     guestName,
     start: lo,
     end: hi,
     variant,
+    ...extras,
     ...(tariffSummary ? { tariffSummary } : {}),
   };
 }

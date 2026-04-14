@@ -2,7 +2,12 @@ import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNavBar } from "@/components/bottom-nav-bar";
@@ -72,7 +77,12 @@ function AppContent() {
             <div className="flex flex-col flex-1 min-w-0">
               <header className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border bg-background shrink-0">
                 <div className="flex items-center gap-2">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarTrigger data-testid="button-sidebar-toggle" />
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{t("header.sidebarToggle")}</TooltipContent>
+                  </Tooltip>
                   <h1 className="text-sm font-medium text-muted-foreground hidden sm:block">
                     {t("header.appName")}
                   </h1>

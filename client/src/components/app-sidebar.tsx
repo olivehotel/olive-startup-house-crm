@@ -1,6 +1,8 @@
+import { useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
+  useSidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
@@ -103,6 +105,11 @@ const bottomItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { userEmail, userName } = useAuth();
+  const { setOpen, setOpenMobile, isMobile } = useSidebar();
+  const closeSidebar = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    else setOpen(false);
+  }, [isMobile, setOpen, setOpenMobile]);
   const displayName = userName ?? (userEmail ? userEmail.split("@")[0] : "");
   const initials = displayName.slice(0, 2).toUpperCase();
 
@@ -156,7 +163,10 @@ export function AppSidebar() {
                     data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
                     className={item.highlight ? "font-semibold text-primary" : ""}
                   >
-                    <Link href={item.url}>
+                    <Link
+                      href={item.url}
+                      onClick={item.url === "/ecosmart" ? closeSidebar : undefined}
+                    >
                       <item.icon className={`h-4 w-4${item.highlight ? " text-primary" : ""}`} />
                       <span>{item.title}</span>
                     </Link>

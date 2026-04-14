@@ -18,6 +18,7 @@ import { ChevronLeft, ChevronRight, ChevronsDownUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   Collapsible,
   CollapsibleContent,
@@ -39,6 +40,8 @@ type ViewMode = "week" | "month" | "3month";
 
 const LABEL_W = 240;
 const MIN_DAY_PX = 36;
+/** Month view: floor width so the strip is wider than typical main column (~1400px), forcing horizontal scroll for all days. */
+const MONTH_TABLE_MIN_WIDTH = 1500;
 
 function viewRange(anchor: Date, mode: ViewMode): { from: Date; to: Date } {
   if (mode === "week") {
@@ -113,6 +116,99 @@ function bedHasActiveBookingInRange(bed: CheckerboardBed, days: Date[]): boolean
   return bed.bookings.some((b) => days.some((d) => overlapsCalendarDay(b, d)));
 }
 
+function bookingStatusDisplay(b: CheckerboardBooking): string {
+  if (b.statusLabel?.trim()) return b.statusLabel.trim();
+  return b.variant === "pending" ? "Pending" : "Confirmed";
+}
+
+function dashOr(value?: string | null): string {
+  const s = value?.trim();
+  return s ? s : "—";
+}
+
+function BookingInfoHover({
+  booking,
+  roomTitle,
+  bedName,
+  barTint,
+}: {
+  booking: CheckerboardBooking;
+  roomTitle: string;
+  bedName: string;
+  /** Text color on the white (i) badge so it matches green vs amber bars */
+  barTint: "emerald" | "amber";
+}) {
+  const fmt = (d: Date) => format(d, "yyyy-MM-dd");
+
+  const rows: { label: string; value: string }[] = [
+    { label: "ID", value: String(booking.id) },
+    { label: "Full Name", value: booking.guestName },
+    { label: "Phone Number", value: dashOr(booking.phone) },
+    { label: "Status", value: bookingStatusDisplay(booking) },
+    { label: "Check-In Date", value: fmt(booking.start) },
+    { label: "Check-Out Date", value: fmt(booking.end) },
+    {
+      label: "Number of Guests",
+      value: booking.guestCount != null ? String(booking.guestCount) : "—",
+    },
+    { label: "Room", value: bedName },
+    { label: "Category", value: roomTitle },
+    { label: "Tariff", value: "—" },
+    { label: "Sum to pay", value: dashOr(booking.tariffSummary) },
+    { label: "Paid", value: dashOr(booking.paidSummary) },
+    { label: "Debt", value: dashOr(booking.debtSummary) },
+  ];
+
+  const tintClass =
+    barTint === "amber"
+      ? "text-amber-800 dark:text-amber-950"
+      : "text-emerald-800 dark:text-emerald-950";
+
+  return (
+    <HoverCard openDelay={200} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white text-[9px] font-semibold leading-none shadow-sm",
+            "hover:bg-white/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+            tintClass,
+          )}
+          aria-label="Booking information"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          i
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        align="start"
+        side="top"
+        sideOffset={6}
+        className={cn(
+          "w-80 max-h-[min(70vh,28rem)] overflow-y-auto border p-0 shadow-xl",
+          "rounded-xl border-white/50 bg-white/80 text-foreground backdrop-blur-[10px]",
+          "dark:border-border/60 dark:bg-background/80 dark:backdrop-blur-[10px]",
+        )}
+      >
+        <div className="border-b border-border/40 px-3 py-2 dark:border-border/50">
+          <p className="text-sm font-semibold text-foreground">Information</p>
+        </div>
+        <div className="space-y-1.5 px-3 py-2.5">
+          {rows.map((row) => (
+            <div
+              key={row.label}
+              className="grid grid-cols-[minmax(0,46%)_minmax(0,54%)] gap-x-2 gap-y-0.5 text-xs leading-snug"
+            >
+              <span className="text-muted-foreground">{row.label}</span>
+              <span className="text-right font-medium text-foreground break-words">{row.value}</span>
+            </div>
+          ))}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
 export function EcoSmartCheckerboard() {
   const [anchor, setAnchor] = useState(() => new Date());
   const [view, setView] = useState<ViewMode>("month");
@@ -139,17 +235,26 @@ export function EcoSmartCheckerboard() {
     staleTime: 120_000,
   });
 
-  const gridTemplate = useMemo(
-    () => `${LABEL_W}px repeat(${numDays}, minmax(${MIN_DAY_PX}px, 1fr))`,
-    [numDays],
-  );
-
-  const minTableWidth = LABEL_W + numDays * MIN_DAY_PX;
+  const { gridTemplate, tableWidth, dayColPx } = useMemo(() => {
+    const natural = LABEL_W + numDays * MIN_DAY_PX;
+    const targetWidth =
+      view === "month" ? Math.max(natural, MONTH_TABLE_MIN_WIDTH) : natural;
+    const dayPx = Math.max(
+      MIN_DAY_PX,
+      Math.ceil((targetWidth - LABEL_W) / Math.max(numDays, 1)),
+    );
+    const tw = LABEL_W + numDays * dayPx;
+    return {
+      gridTemplate: `${LABEL_W}px repeat(${numDays}, ${dayPx}px)`,
+      tableWidth: tw,
+      dayColPx: dayPx,
+    };
+  }, [view, numDays]);
 
   return (
-    <Card className="overflow-hidden border-border">
+    <Card className="border-border">
       <CardContent className="p-0">
-        <div className="flex flex-col gap-3 p-4 border-b border-border bg-muted/20">
+        <div className="flex flex-col gap-3 overflow-hidden rounded-t-xl p-4 border-b border-border bg-muted/20">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-1">
               <Button
@@ -232,15 +337,15 @@ export function EcoSmartCheckerboard() {
               : `Could not load checkerboard: ${(error as Error).message}`}
           </div>
         ) : (
-          <div className="overflow-x-auto overflow-y-visible overscroll-x-contain">
-            <div style={{ minWidth: minTableWidth }}>
+          <div className="min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain touch-pan-x">
+            <div style={{ width: tableWidth, minWidth: tableWidth }}>
               {/* Header */}
               <div
                 className="grid border-b border-border bg-background"
                 style={{ gridTemplateColumns: gridTemplate }}
               >
                 <div
-                  className="sticky left-0 z-20 flex items-end border-r border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground"
+                  className="sticky left-0 z-40 flex items-end border-r border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground"
                   style={{ width: LABEL_W, minWidth: LABEL_W }}
                 >
                   Rooms
@@ -309,6 +414,7 @@ export function EcoSmartCheckerboard() {
                       room={room}
                       days={days}
                       gridTemplate={gridTemplate}
+                      dayColPx={dayColPx}
                       todayIndex={todayIndex}
                     />
                   ))}
@@ -326,11 +432,13 @@ function RoomBlock({
   room,
   days,
   gridTemplate,
+  dayColPx,
   todayIndex,
 }: {
   room: CheckerboardRoomGroup;
   days: Date[];
   gridTemplate: string;
+  dayColPx: number;
   todayIndex: number;
 }) {
   const [open, setOpen] = useState(true);
@@ -341,7 +449,7 @@ function RoomBlock({
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="sticky left-0 z-20 flex items-center gap-2 border-r border-border bg-muted/30 px-2 py-2 text-left text-sm font-medium hover:bg-muted/50"
+            className="sticky left-0 z-40 flex items-center gap-2 border-r border-border bg-background px-2 py-2 text-left text-sm font-medium hover:bg-muted"
             style={{ width: LABEL_W, minWidth: LABEL_W }}
           >
             <ChevronsDownUp
@@ -374,8 +482,10 @@ function RoomBlock({
           <BedRow
             key={bed.id}
             bed={bed}
+            roomTitle={room.title}
             days={days}
             gridTemplate={gridTemplate}
+            dayColPx={dayColPx}
             todayIndex={todayIndex}
           />
         ))}
@@ -386,13 +496,17 @@ function RoomBlock({
 
 function BedRow({
   bed,
+  roomTitle,
   days,
   gridTemplate,
+  dayColPx,
   todayIndex,
 }: {
   bed: CheckerboardBed;
+  roomTitle: string;
   days: Date[];
   gridTemplate: string;
+  dayColPx: number;
   todayIndex: number;
 }) {
   const activeInView = bedHasActiveBookingInRange(bed, days);
@@ -405,7 +519,7 @@ function BedRow({
       style={{ gridTemplateColumns: gridTemplate }}
     >
       <div
-        className="sticky left-0 z-20 flex items-center gap-2 border-r border-border bg-background px-3 py-1.5 text-sm"
+        className="sticky left-0 z-40 flex items-center gap-2 border-r border-border bg-background px-3 py-1.5 text-sm"
         style={{ width: LABEL_W, minWidth: LABEL_W }}
       >
         <span
@@ -419,7 +533,14 @@ function BedRow({
       </div>
 
       <div className="relative min-h-[40px]" style={{ gridColumn: "2 / -1" }}>
-        <TimelineInner days={days} bookings={bed.bookings} todayIndex={todayIndex} />
+        <TimelineInner
+          days={days}
+          bookings={bed.bookings}
+          roomTitle={roomTitle}
+          bedName={bed.name}
+          todayIndex={todayIndex}
+          dayColPx={dayColPx}
+        />
       </div>
     </div>
   );
@@ -428,11 +549,17 @@ function BedRow({
 function TimelineInner({
   days,
   bookings,
+  roomTitle,
+  bedName,
   todayIndex,
+  dayColPx,
 }: {
   days: Date[];
   bookings: CheckerboardBooking[];
+  roomTitle: string;
+  bedName: string;
   todayIndex: number;
+  dayColPx: number;
 }) {
   const numDays = days.length;
 
@@ -440,7 +567,7 @@ function TimelineInner({
     <div
       className="relative grid h-full min-h-[40px]"
       style={{
-        gridTemplateColumns: `repeat(${numDays}, minmax(${MIN_DAY_PX}px, 1fr))`,
+        gridTemplateColumns: `repeat(${numDays}, ${dayColPx}px)`,
       }}
     >
       {days.map((d) => {
@@ -469,17 +596,13 @@ function TimelineInner({
           const { startI, endI } = span;
           const left = (startI / numDays) * 100;
           const width = ((endI - startI + 1) / numDays) * 100;
-          const isPending = b.variant === "pending";
+          const isPending =
+            b.variant === "pending" || /create/i.test(b.statusLabel ?? "");
           return (
             <div
               key={b.id}
-              title={
-                b.tariffSummary
-                  ? `${b.guestName} — ${b.tariffSummary}`
-                  : b.guestName
-              }
               className={cn(
-                "absolute top-1 flex h-7 max-w-full items-center overflow-hidden rounded-md px-1.5 text-[10px] font-medium leading-tight text-white shadow-sm",
+                "pointer-events-auto absolute top-1 flex h-7 max-w-full min-w-0 items-center gap-1 overflow-hidden rounded-md px-1.5 text-[10px] font-medium leading-tight text-white shadow-sm",
                 isPending ? "bg-amber-500/90" : "bg-emerald-600/90",
               )}
               style={{
@@ -488,7 +611,13 @@ function TimelineInner({
                 minWidth: 4,
               }}
             >
-              <span className="truncate">{b.guestName}</span>
+              <span className="min-w-0 flex-1 truncate">{b.guestName}</span>
+              <BookingInfoHover
+                booking={b}
+                roomTitle={roomTitle}
+                bedName={bedName}
+                barTint={isPending ? "amber" : "emerald"}
+              />
             </div>
           );
         })}

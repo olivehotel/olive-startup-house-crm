@@ -25,7 +25,8 @@ type TranslationKey =
   | "auth.loginError"
   | "auth.forgotPasswordError"
   | "header.appName"
-  | "header.logout";
+  | "header.logout"
+  | "header.sidebarToggle";
 
 const dictionary: Record<TranslationKey, string> = {
   "auth.title": "Authorization",
@@ -51,6 +52,7 @@ const dictionary: Record<TranslationKey, string> = {
   "auth.forgotPasswordError": "Unable to send reset email",
   "header.appName": "Olive Startup House",
   "header.logout": "Log out",
+  "header.sidebarToggle": "Show or hide sidebar",
 };
 
 type I18nContextValue = {

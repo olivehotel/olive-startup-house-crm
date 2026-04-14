@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSidebar } from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +19,17 @@ import type { Property, Room } from "@shared/schema";
 import { EcoSmartCheckerboard } from "@/components/ecosmart-checkerboard";
 
 export default function EcoSmartPage() {
+  const { setOpen, setOpenMobile } = useSidebar();
+  // Close sidebar once when entering EcoSmart so the calendar gets width.
+  // Do not depend on `setOpen`: in SidebarProvider it is recreated whenever `open`
+  // changes, which would re-run this effect after the user opens the sidebar and
+  // immediately collapse it again.
+  useEffect(() => {
+    setOpen(false);
+    setOpenMobile(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run only on mount / route entry
+  }, []);
+
   const { data: properties } = useQuery<Property[]>({
     queryKey: ["/api/properties"],
   });
