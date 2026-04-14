@@ -24,6 +24,26 @@ import type { Lead } from "@shared/schema";
 
 const MOBILE_PAGE_SIZE = 6;
 
+/** Local Monday 00:00:00 for the week containing `d`. */
+function startOfWeekMonday(d: Date): Date {
+  const copy = new Date(d);
+  const day = copy.getDay();
+  const diffFromMonday = day === 0 ? -6 : 1 - day;
+  copy.setDate(copy.getDate() + diffFromMonday);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+/** Whether `isoString` falls in the same local calendar week as `reference` (Mon–Sun). */
+function isCreatedInWeek(isoString: string, reference: Date): boolean {
+  const created = new Date(isoString);
+  if (Number.isNaN(created.getTime())) return false;
+  const weekStart = startOfWeekMonday(reference);
+  const nextWeekStart = new Date(weekStart);
+  nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+  return created >= weekStart && created < nextWeekStart;
+}
+
 /** Qualified (payment button enabled) + legacy DB Payment Pending rows. */
 function matchesPaymentPendingTab(lead: Lead): boolean {
   return lead.status === "Qualified" || lead.status === "Payment Pending";
@@ -97,6 +117,13 @@ export default function LeadsPage() {
     Converted: leads?.filter(l => l.status === "Converted").length || 0,
   };
 
+  const newThisWeekCount = useMemo(() => {
+    const now = new Date();
+    return (
+      leads?.filter((l) => isCreatedInWeek(l.createdAt, now)).length ?? 0
+    );
+  }, [leads]);
+
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto min-w-0 w-full">
       {/* Header */}
@@ -145,7 +172,7 @@ export default function LeadsPage() {
                 <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{leadsByStatus.New}</p>
+                <p className="text-2xl font-bold">{newThisWeekCount}</p>
                 <p className="text-sm text-muted-foreground">New This Week</p>
               </div>
             </div>

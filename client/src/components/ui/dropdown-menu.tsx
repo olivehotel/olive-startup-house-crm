@@ -38,9 +38,16 @@ const DropdownMenuSubTrigger = React.forwardRef<
 DropdownMenuSubTrigger.displayName =
   DropdownMenuPrimitive.SubTrigger.displayName
 
+/** Radix SubContent forwards these at runtime; some @radix-ui versions omit them from SubContent props. */
+type DropdownMenuSubContentExtraProps = Pick<
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>,
+  "side" | "align" | "sideOffset" | "alignOffset" | "collisionPadding"
+>;
+
 const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent> &
+    DropdownMenuSubContentExtraProps
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.SubContent
     ref={ref}
@@ -51,6 +58,7 @@ const DropdownMenuSubContent = React.forwardRef<
     {...props}
   />
 ))
+
 DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName
 
