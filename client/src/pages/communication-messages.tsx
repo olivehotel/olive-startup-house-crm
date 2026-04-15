@@ -7,6 +7,7 @@ import {
 import { useParams, useLocation, Link } from "wouter";
 import {
   createCalendarEvent,
+  createGuestInvite,
   createLeadFromCommunication,
   getCommunicationMessages,
   sendEmailMessage,
@@ -71,6 +72,7 @@ import {
   Phone,
   Send,
   Loader2,
+  MailPlus,
   Receipt,
   UserPlus,
   Video,
@@ -928,6 +930,85 @@ export default function CommunicationMessagesPage() {
     },
   });
 
+  const guestInviteMutation = useMutation({
+    mutationFn: () => {
+      if (!comm) throw new Error("No communication loaded.");
+      return createGuestInvite({
+        email: comm.contact_email,
+        name: comm.contact_name,
+        phone: linkedLead?.phone ?? "",
+      });
+    },
+    onSuccess: (data) => {
+      const magicLink =
+        typeof data.magic_link === "string" && data.magic_link.trim() !== ""
+          ? data.magic_link.trim()
+          : undefined;
+
+      if (magicLink && communicationId) {
+        const trimmedSubject = subject.trim();
+        const subjectLine =
+          trimmedSubject ||
+          (sortedMessages.length > 0
+            ? (() => {
+                const lastSubject = sortedMessages[sortedMessages.length - 1].subject;
+                if (!lastSubject) return "Guest invite";
+                return lastSubject.startsWith("Re:")
+                  ? lastSubject
+                  : `Re: ${lastSubject}`;
+              })()
+            : "Guest invite");
+
+        mutation.mutate(
+          {
+            communication_id: communicationId,
+            body: magicLink,
+            subject: subjectLine,
+            is_invoice: bodyContainsInvoiceLink(magicLink, invoiceLinks ?? []),
+          },
+          {
+            onSuccess: () => {
+              toast({
+                title: "Invite sent",
+                description: "The guest link was sent as a message.",
+              });
+            },
+            onError: (err: Error) => {
+              toast({
+                title: "Invite created; message not sent",
+                description: err.message,
+                variant: "destructive",
+              });
+            },
+          },
+        );
+        return;
+      }
+
+      const urlForToast =
+        magicLink ??
+        (typeof data.invite_url === "string" ? data.invite_url : undefined) ??
+        (typeof data.url === "string" ? data.url : undefined) ??
+        (typeof data.link === "string" ? data.link : undefined);
+
+      const fallback = JSON.stringify(data);
+      const description =
+        urlForToast ??
+        (fallback.length > 200 ? `${fallback.slice(0, 200)}…` : fallback);
+      toast({
+        title: "Invite sent",
+        description: description || "Guest invite created.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Could not send invite",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   function handleSubmitInPersonTour(e: React.FormEvent) {
     e.preventDefault();
     if (!communicationId) return;
@@ -1217,6 +1298,43 @@ export default function CommunicationMessagesPage() {
                       <span>Phone call setup</span>
                       <span className="text-xs text-muted-foreground">
                         Schedule a call
+                      </span>
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
+                  disabled={guestInviteMutation.isPending}
+                  onSelect={() => {
+                    if (!comm) {
+                      toast({
+                        title: "Could not send invite",
+                        description: "No communication loaded.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    if (!comm.contact_email?.trim()) {
+                      toast({
+                        title: "Could not send invite",
+                        description: "This thread has no contact email.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    guestInviteMutation.mutate();
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    {guestInviteMutation.isPending ? (
+                      <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                    ) : (
+                      <MailPlus className="mt-0.5 h-4 w-4 shrink-0" />
+                    )}
+                    <div className="flex min-w-0 flex-col items-start gap-0">
+                      <span>Send invite</span>
+                      <span className="text-xs text-muted-foreground">
+                        Guest portal access
                       </span>
                     </div>
                   </div>

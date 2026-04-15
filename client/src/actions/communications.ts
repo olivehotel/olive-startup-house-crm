@@ -45,3 +45,15 @@ export const createLeadFromCommunication = (communicationId: string) =>
     method: "POST",
     body: { communication_id: communicationId },
   });
+
+export type CreateGuestInvitePayload = {
+  email: string;
+  name: string;
+  phone: string;
+};
+
+export const createGuestInvite = (payload: CreateGuestInvitePayload) =>
+  apiFetch<Record<string, unknown>>("create-guest-invite", {
+    method: "POST",
+    body: payload,
+  });
