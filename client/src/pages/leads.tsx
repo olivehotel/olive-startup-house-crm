@@ -18,11 +18,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Filter, TrendingUp, Users, Target, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Filter,
+  TrendingUp,
+  Users,
+  Target,
+  CheckCircle,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Lead } from "@shared/schema";
 
-const MOBILE_PAGE_SIZE = 6;
+const LEADS_PAGE_SIZE = 20;
 
 /** Local Monday 00:00:00 for the week containing `d`. */
 function startOfWeekMonday(d: Date): Date {
@@ -53,7 +64,7 @@ export default function LeadsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [statusTab, setStatusTab] = useState("all");
-  const [mobilePage, setMobilePage] = useState(1);
+  const [page, setPage] = useState(1);
 
   const { data: leads, isLoading, isError, error } = useQuery<Lead[]>({
     queryKey: LEADS_QUERY_KEY,
@@ -88,25 +99,25 @@ export default function LeadsPage() {
     );
   }, [leads, searchQuery, sourceFilter, statusTab]);
 
-  const mobileTotalPages = Math.max(
+  const totalPages = Math.max(
     1,
-    Math.ceil(filteredLeads.length / MOBILE_PAGE_SIZE),
+    Math.ceil(filteredLeads.length / LEADS_PAGE_SIZE),
   );
 
   useEffect(() => {
-    setMobilePage(1);
+    setPage(1);
   }, [statusTab, searchQuery, sourceFilter]);
 
   useEffect(() => {
-    setMobilePage((p) => Math.min(Math.max(1, p), mobileTotalPages));
-  }, [mobileTotalPages]);
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
 
-  const safeMobilePage = Math.min(Math.max(1, mobilePage), mobileTotalPages);
+  const safePage = Math.min(Math.max(1, page), totalPages);
 
-  const mobileLeads = useMemo(() => {
-    const start = (safeMobilePage - 1) * MOBILE_PAGE_SIZE;
-    return filteredLeads.slice(start, start + MOBILE_PAGE_SIZE);
-  }, [filteredLeads, safeMobilePage]);
+  const pagedLeads = useMemo(() => {
+    const start = (safePage - 1) * LEADS_PAGE_SIZE;
+    return filteredLeads.slice(start, start + LEADS_PAGE_SIZE);
+  }, [filteredLeads, safePage]);
 
   const leadsByStatus = {
     all: leads?.length || 0,
@@ -329,53 +340,32 @@ export default function LeadsPage() {
               </div>
             ) : (
               <>
-                <LeadsPipelineResponsive
-                  leads={filteredLeads}
-                  mobileLeads={mobileLeads}
-                  variant="page"
-                />
-                {filteredLeads.length > MOBILE_PAGE_SIZE && (
-                  <div className="md:hidden flex flex-col items-center gap-3 pt-4 mt-4 border-t border-border/60">
-                    <p className="text-xs text-muted-foreground">
-                      Showing{" "}
-                      {(safeMobilePage - 1) * MOBILE_PAGE_SIZE + 1}–
-                      {Math.min(
-                        safeMobilePage * MOBILE_PAGE_SIZE,
-                        filteredLeads.length,
-                      )}{" "}
-                      of {filteredLeads.length}
-                    </p>
-                    <div className="flex items-center justify-center gap-2 w-full max-w-sm">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        disabled={safeMobilePage <= 1}
-                        onClick={() =>
-                          setMobilePage((p) => Math.max(1, p - 1))
-                        }
-                      >
-                        Previous
-                      </Button>
-                      <span className="text-sm text-muted-foreground tabular-nums shrink-0 px-1">
-                        Page {safeMobilePage} of {mobileTotalPages}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        disabled={safeMobilePage >= mobileTotalPages}
-                        onClick={() =>
-                          setMobilePage((p) =>
-                            Math.min(mobileTotalPages, p + 1),
-                          )
-                        }
-                      >
-                        Next
-                      </Button>
-                    </div>
+                <LeadsPipelineResponsive leads={pagedLeads} variant="page" />
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 pt-4 mt-4 border-t border-border/60">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {safePage} of {totalPages}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={safePage >= totalPages}
+                    >
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
                   </div>
                 )}
               </>

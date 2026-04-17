@@ -117,25 +117,20 @@ export function LeadsMobileStack({ leads }: LeadsMobileStackProps) {
 
 type LeadsPipelineResponsiveProps = {
   leads: Lead[];
-  /** When set, mobile stack shows this slice; desktop table still uses `leads`. */
-  mobileLeads?: Lead[];
   variant?: "page" | "embedded";
 };
 
 export function LeadsPipelineResponsive({
   leads,
-  mobileLeads,
   variant = "page",
 }: LeadsPipelineResponsiveProps) {
-  const stackLeads = mobileLeads ?? leads;
-
   return (
     <>
       <div className="hidden md:block">
         <LeadsTable leads={leads} variant={variant} />
       </div>
       <div className="md:hidden">
-        <LeadsMobileStack leads={stackLeads} />
+        <LeadsMobileStack leads={leads} />
       </div>
     </>
   );
