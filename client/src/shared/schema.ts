@@ -490,4 +490,6 @@ export interface CommunicationMessagesResponse {
   communication: CommunicationDetail;
   messages: CommunicationMessage[];
   count: number;
+  /** Present when the edge function returns paginated results */
+  pagination?: Pagination;
 }

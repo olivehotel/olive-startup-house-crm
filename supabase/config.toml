@@ -1,0 +1,5 @@
+# https://supabase.com/docs/guides/cli/config
+# project_id is set when you run `supabase link`
+
+[functions.get-communication-messages]
+verify_jwt = true

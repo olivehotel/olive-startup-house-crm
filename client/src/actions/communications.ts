@@ -1,16 +1,25 @@
 import { apiFetch } from "@/lib/api";
 import type { Communication, CommunicationMessagesResponse, Pagination } from "@shared/schema";
 
+export const COMMUNICATION_MESSAGES_PAGE_SIZE = 20;
+
 export const getCommunications = (page = 1) =>
   apiFetch<{ communications: Communication[]; pagination: Pagination }>(
     "get-communications",
     { params: { page } },
   );
 
-export const getCommunicationMessages = (communicationId: string) =>
+export const getCommunicationMessages = (
+  communicationId: string,
+  params?: { page?: number; limit?: number },
+) =>
   apiFetch<CommunicationMessagesResponse>("get-communication-messages", {
     method: "POST",
-    body: { communication_id: communicationId },
+    body: {
+      communication_id: communicationId,
+      page: params?.page ?? 1,
+      limit: params?.limit ?? COMMUNICATION_MESSAGES_PAGE_SIZE,
+    },
   });
 
 export const sendEmailMessage = (payload: {

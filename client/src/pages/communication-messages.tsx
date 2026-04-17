@@ -1,5 +1,6 @@
 import {
   keepPreviousData,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -9,6 +10,7 @@ import {
   createCalendarEvent,
   createGuestInvite,
   createLeadFromCommunication,
+  COMMUNICATION_MESSAGES_PAGE_SIZE,
   getCommunicationMessages,
   sendEmailMessage,
 } from "@/actions/communications";
@@ -24,7 +26,6 @@ import { communicationChannels, communicationStatuses } from "@shared/schema";
 import type {
   CommunicationMessage,
   CommunicationMessageAttachment,
-  CommunicationMessagesResponse,
   CommunityDocument,
   CommunityDocumentsPagination,
   Lead,
@@ -79,7 +80,15 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRef, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useRef,
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  type ReactNode,
+  type UIEvent,
+} from "react";
 import DOMPurify from "dompurify";
 
 const statusColors: Record<string, string> = {
@@ -626,6 +635,8 @@ export default function CommunicationMessagesPage() {
   const communicationId = params.id;
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const allowLoadOlderRef = useRef(false);
   const composeBodyRef = useRef<HTMLTextAreaElement>(null);
 
   const [subject, setSubject] = useState("");
@@ -669,14 +680,38 @@ export default function CommunicationMessagesPage() {
     };
   }, [selectedDocumentIds, documentTitlesById]);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["communication-messages", communicationId],
-    queryFn: () => getCommunicationMessages(communicationId),
+  const messagesQuery = useInfiniteQuery({
+    queryKey: ["communication-messages", communicationId, COMMUNICATION_MESSAGES_PAGE_SIZE],
+    queryFn: ({ pageParam }) =>
+      getCommunicationMessages(communicationId!, {
+        page: pageParam,
+        limit: COMMUNICATION_MESSAGES_PAGE_SIZE,
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination?.has_next_page ? lastPage.pagination.page + 1 : undefined,
     enabled: Boolean(communicationId),
   });
 
-  const comm = data?.communication;
-  const messages = data?.messages ?? [];
+  const {
+    data,
+    isLoading,
+    isError,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = messagesQuery;
+
+  const firstPage = data?.pages?.[0];
+  const comm = firstPage?.communication;
+  const sortedMessages = useMemo(() => {
+    const pages = data?.pages ?? [];
+    const merged = [...pages].reverse().flatMap((p) => p.messages ?? []);
+    return merged.sort(
+      (a, b) =>
+        new Date(a.received_at).getTime() - new Date(b.received_at).getTime(),
+    );
+  }, [data?.pages]);
 
   const leadId = comm?.lead_id ?? undefined;
   const { data: linkedLead, isLoading: leadLoading } = useQuery<Lead>({
@@ -695,10 +730,9 @@ export default function CommunicationMessagesPage() {
     staleTime: 60_000,
   });
 
-  const sortedMessages = [...messages].sort(
-    (a, b) =>
-      new Date(a.received_at).getTime() - new Date(b.received_at).getTime(),
-  );
+  useEffect(() => {
+    allowLoadOlderRef.current = false;
+  }, [communicationId]);
 
   // Pre-fill subject from the last message in the thread
   useEffect(() => {
@@ -714,10 +748,34 @@ export default function CommunicationMessagesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  // Scroll to bottom whenever messages change
+  // Initial scroll to bottom after first page loads (do not run on older-page fetches)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [sortedMessages.length]);
+    if (!firstPage || isLoading) return;
+    bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    queueMicrotask(() => {
+      allowLoadOlderRef.current = true;
+    });
+  }, [firstPage, isLoading, communicationId]);
+
+  const onThreadScroll = useCallback(
+    (e: UIEvent<HTMLDivElement>) => {
+      if (!allowLoadOlderRef.current) return;
+      const el = e.currentTarget;
+      if (el.scrollTop > 80) return;
+      if (!hasNextPage || isFetchingNextPage) return;
+      const prevH = el.scrollHeight;
+      void fetchNextPage().then(() => {
+        requestAnimationFrame(() => {
+          const inner = threadScrollRef.current;
+          if (inner) inner.scrollTop += inner.scrollHeight - prevH;
+        });
+      });
+    },
+    [hasNextPage, isFetchingNextPage, fetchNextPage],
+  );
+
+  const messageTotal =
+    firstPage?.pagination?.total ?? firstPage?.count ?? sortedMessages.length;
 
   const channelLabel = comm
     ? communicationChannels[comm.channel_id]
@@ -808,54 +866,16 @@ export default function CommunicationMessagesPage() {
     toggleDocumentSelection(id, documentTitlesById[id] ?? "", false);
   }
 
-  type SendEmailMutationContext = {
-    sentBody: string;
-    sentSubject: string;
-    attachmentSnapshot: CommunicationMessageAttachment[];
-  };
-
   const mutation = useMutation({
     mutationFn: sendEmailMessage,
-    onMutate: (variables): SendEmailMutationContext => {
-      const { ids, titles } = documentSelectionRef.current;
-      const attachmentSnapshot: CommunicationMessageAttachment[] = ids.map((id) => ({
-        id,
-        filename: titles[id] ?? "Document",
-      }));
-      return {
-        sentBody: variables.body,
-        sentSubject: variables.subject,
-        attachmentSnapshot,
-      };
-    },
-    onSuccess: async (_data, _variables, context) => {
+    onSuccess: async () => {
       if (!communicationId) return;
       await queryClient.refetchQueries({
-        queryKey: ["communication-messages", communicationId],
+        queryKey: ["communication-messages", communicationId, COMMUNICATION_MESSAGES_PAGE_SIZE],
       });
-      if (context?.attachmentSnapshot?.length) {
-        queryClient.setQueryData<CommunicationMessagesResponse | undefined>(
-          ["communication-messages", communicationId],
-          (old) => {
-            if (!old) return old;
-            const messages = [...old.messages];
-            for (let i = messages.length - 1; i >= 0; i--) {
-              const m = messages[i];
-              if (
-                m.direction === "outgoing" &&
-                m.body_text?.trim() === context.sentBody.trim() &&
-                m.subject === context.sentSubject
-              ) {
-                if (!m.attachments?.length) {
-                  messages[i] = { ...m, attachments: context.attachmentSnapshot };
-                }
-                break;
-              }
-            }
-            return { ...old, messages };
-          },
-        );
-      }
+      queueMicrotask(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
       setBody("");
       setSendError(null);
       setSelectedDocumentIds([]);
@@ -892,7 +912,7 @@ export default function CommunicationMessagesPage() {
             : "Your in-person tour is on the thread.",
       });
       queryClient.invalidateQueries({
-        queryKey: ["communication-messages", communicationId],
+        queryKey: ["communication-messages", communicationId, COMMUNICATION_MESSAGES_PAGE_SIZE],
       });
     },
     onError: (err: Error) => {
@@ -908,7 +928,7 @@ export default function CommunicationMessagesPage() {
     mutationFn: () => createLeadFromCommunication(communicationId!),
     onSuccess: async (res) => {
       await queryClient.invalidateQueries({
-        queryKey: ["communication-messages", communicationId],
+        queryKey: ["communication-messages", communicationId, COMMUNICATION_MESSAGES_PAGE_SIZE],
       });
       await queryClient.invalidateQueries({ queryKey: ["communications"] });
       if (res?.lead_id) {
@@ -1395,15 +1415,24 @@ export default function CommunicationMessagesPage() {
           </div>
         )}
 
-        {data && (
+        {firstPage && (
           <span className="text-xs text-muted-foreground shrink-0">
-            {data.count} message{data.count !== 1 ? "s" : ""}
+            {messageTotal} message{messageTotal !== 1 ? "s" : ""}
           </span>
         )}
       </div>
 
       {/* Messages thread */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 sm:px-6 sm:py-4 flex flex-col gap-4">
+      <div
+        ref={threadScrollRef}
+        onScroll={onThreadScroll}
+        className="flex-1 overflow-y-auto px-3 py-3 sm:px-6 sm:py-4 flex flex-col gap-4"
+      >
+        {isFetchingNextPage && (
+          <div className="flex justify-center py-2 shrink-0">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Loading older messages" />
+          </div>
+        )}
         {isLoading ? (
           <>
             <div className="flex gap-3 max-w-[70%] mr-auto">
