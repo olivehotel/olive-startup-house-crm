@@ -1,5 +1,17 @@
 import { apiFetch } from "@/lib/api";
-import { parseISO, isValid } from "date-fns";
+import {
+  addMonths,
+  addWeeks,
+  endOfDay,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isValid,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns";
 
 export type CheckerboardLocation = "mp" | "pa";
 
@@ -40,6 +52,66 @@ export type CheckerboardRoomGroup = {
 export type CheckerboardModel = {
   rooms: CheckerboardRoomGroup[];
 };
+
+/** Week / month / rolling 3-month range for the checkerboard grid */
+export type CheckerboardViewMode = "week" | "month" | "3month";
+
+export function viewRange(anchor: Date, mode: CheckerboardViewMode): { from: Date; to: Date } {
+  if (mode === "week") {
+    const from = startOfWeek(anchor, { weekStartsOn: 1 });
+    const to = endOfWeek(anchor, { weekStartsOn: 1 });
+    return { from, to };
+  }
+  if (mode === "month") {
+    return { from: startOfMonth(anchor), to: endOfMonth(anchor) };
+  }
+  return {
+    from: startOfMonth(anchor),
+    to: endOfMonth(addMonths(anchor, 2)),
+  };
+}
+
+export function navigateAnchor(anchor: Date, mode: CheckerboardViewMode, dir: -1 | 1): Date {
+  if (mode === "week") return addWeeks(anchor, dir);
+  if (mode === "month") return addMonths(anchor, dir);
+  return addMonths(anchor, dir * 3);
+}
+
+export function formatRangeTitle(anchor: Date, mode: CheckerboardViewMode): string {
+  if (mode === "week") {
+    const from = startOfWeek(anchor, { weekStartsOn: 1 });
+    const to = endOfWeek(anchor, { weekStartsOn: 1 });
+    return `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`;
+  }
+  if (mode === "month") {
+    return format(anchor, "MMMM yyyy");
+  }
+  const from = startOfMonth(anchor);
+  const to = endOfMonth(addMonths(anchor, 2));
+  return `${format(from, "MMM yyyy")} – ${format(to, "MMM yyyy")}`;
+}
+
+export function overlapsCalendarDay(booking: CheckerboardBooking, day: Date): boolean {
+  const ds = startOfDay(day);
+  const de = endOfDay(day);
+  return booking.start <= de && booking.end >= ds;
+}
+
+export function occupancyForDay(
+  beds: CheckerboardBed[],
+  day: Date,
+): { occupied: number; total: number } {
+  const total = beds.length;
+  if (total === 0) return { occupied: 0, total: 0 };
+  const occupied = beds.filter((bed) =>
+    bed.bookings.some((b) => overlapsCalendarDay(b, day)),
+  ).length;
+  return { occupied, total };
+}
+
+export function flattenBeds(model: CheckerboardModel): CheckerboardBed[] {
+  return model.rooms.flatMap((r) => r.beds);
+}
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;

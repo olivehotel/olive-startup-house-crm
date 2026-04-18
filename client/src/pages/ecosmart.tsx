@@ -1,34 +1,60 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Calendar,
   Key,
   Eye,
   Building2,
   BedDouble,
-  DoorOpen,
   DollarSign,
   Settings,
   Plus,
 } from "lucide-react";
 import type { Property, Room } from "@shared/schema";
 import { EcoSmartCheckerboard } from "@/components/ecosmart-checkerboard";
+import {
+  CHECKERBOARD_QUERY_KEY,
+  type CheckerboardLocation,
+  type CheckerboardViewMode,
+  fetchCheckerboard,
+  flattenBeds,
+  occupancyForDay,
+  viewRange,
+} from "@/lib/checkerboard-api";
 
 export default function EcoSmartPage() {
   const { setOpen, setOpenMobile } = useSidebar();
-  // Close sidebar once when entering EcoSmart so the calendar gets width.
-  // Do not depend on `setOpen`: in SidebarProvider it is recreated whenever `open`
-  // changes, which would re-run this effect after the user opens the sidebar and
-  // immediately collapse it again.
+  const [anchor, setAnchor] = useState(() => new Date());
+  const [view, setView] = useState<CheckerboardViewMode>("month");
+  const [checkerboardLocation, setCheckerboardLocation] = useState<CheckerboardLocation>("mp");
+
   useEffect(() => {
     setOpen(false);
     setOpenMobile(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run only on mount / route entry
   }, []);
+
+  const { from, to } = useMemo(() => viewRange(anchor, view), [anchor, view]);
+
+  const {
+    data: checkerboardData,
+    isLoading: checkerboardLoading,
+    error: checkerboardError,
+  } = useQuery({
+    queryKey: [CHECKERBOARD_QUERY_KEY, checkerboardLocation, from.toISOString(), to.toISOString()],
+    queryFn: () =>
+      fetchCheckerboard({
+        location: checkerboardLocation,
+        fromDate: from,
+        toDate: to,
+      }),
+    staleTime: 120_000,
+  });
 
   const { data: properties } = useQuery<Property[]>({
     queryKey: ["/api/properties"],
@@ -38,15 +64,15 @@ export default function EcoSmartPage() {
     queryKey: ["/api/rooms"],
   });
 
-  const totalBeds = properties?.reduce((sum, p) => sum + p.totalBeds, 0) || 0;
-  const occupiedBeds = properties?.reduce((sum, p) => sum + p.occupiedBeds, 0) || 0;
-  const totalRooms = properties?.reduce((sum, p) => sum + p.totalRooms, 0) || 0;
-  const occupiedRooms = properties?.reduce((sum, p) => sum + p.occupiedRooms, 0) || 0;
   const totalRevenue = properties?.reduce((sum, p) => sum + p.monthlyRevenue, 0) || 0;
   const smartLockRooms = rooms?.filter((r) => r.hasSmartLock).length || 0;
 
-  const bedOccupancy = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
-  const roomOccupancy = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
+  const beds = checkerboardData ? flattenBeds(checkerboardData) : [];
+  const todayOcc = occupancyForDay(beds, new Date());
+  const bedOccupancyPct =
+    todayOcc.total > 0 ? Math.round((todayOcc.occupied / todayOcc.total) * 100) : 0;
+
+  const statsReady = !checkerboardLoading && !checkerboardError;
 
   return (
     <div className="w-full min-w-0 pb-6 max-w-[1400px] mx-auto px-6">
@@ -130,28 +156,32 @@ export default function EcoSmartPage() {
           <Card>
             <CardContent className="p-4 text-center">
               <Building2 className="h-6 w-6 mx-auto text-muted-foreground" />
-              <p className="text-2xl font-bold mt-2">{properties?.length || 0}</p>
-              <p className="text-sm text-muted-foreground">Properties</p>
+              {checkerboardLoading ? (
+                <Skeleton className="h-8 w-16 mx-auto mt-2" />
+              ) : (
+                <p className="text-2xl font-bold mt-2">
+                  {checkerboardError ? "—" : beds.length}
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground">Beds</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <BedDouble className="h-6 w-6 mx-auto text-muted-foreground" />
-              <p className="text-2xl font-bold mt-2">{bedOccupancy}%</p>
+              {checkerboardLoading ? (
+                <Skeleton className="h-8 w-20 mx-auto mt-2" />
+              ) : (
+                <p className="text-2xl font-bold mt-2">
+                  {checkerboardError ? "—" : `${bedOccupancyPct}%`}
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">
-                Bed Occupancy ({occupiedBeds}/{totalBeds})
+                Occupancy ({statsReady ? `${todayOcc.occupied}/${todayOcc.total}` : "—"})
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <DoorOpen className="h-6 w-6 mx-auto text-muted-foreground" />
-              <p className="text-2xl font-bold mt-2">{roomOccupancy}%</p>
-              <p className="text-sm text-muted-foreground">
-                Room Occupancy ({occupiedRooms}/{totalRooms})
-              </p>
-            </CardContent>
-          </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <Key className="h-6 w-6 mx-auto text-muted-foreground" />
@@ -169,7 +199,17 @@ export default function EcoSmartPage() {
         </div>
 
         <div className="mt-6">
-          <EcoSmartCheckerboard />
+          <EcoSmartCheckerboard
+            anchor={anchor}
+            view={view}
+            location={checkerboardLocation}
+            onAnchorChange={setAnchor}
+            onViewChange={setView}
+            onLocationChange={setCheckerboardLocation}
+            data={checkerboardData}
+            isLoading={checkerboardLoading}
+            error={checkerboardError as Error | null}
+          />
         </div>
       </div>
     </div>

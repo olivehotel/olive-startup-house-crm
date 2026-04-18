@@ -1,19 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import {
-  addMonths,
-  addWeeks,
-  eachDayOfInterval,
-  endOfDay,
-  endOfMonth,
-  endOfWeek,
-  format,
-  isSameDay,
-  isWeekend,
-  startOfDay,
-  startOfMonth,
-  startOfWeek,
-} from "date-fns";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { eachDayOfInterval, format, isSameDay, isWeekend } from "date-fns";
 import { ChevronLeft, ChevronRight, ChevronsDownUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,73 +15,35 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import {
-  CHECKERBOARD_QUERY_KEY,
   type CheckerboardBed,
   type CheckerboardBooking,
   type CheckerboardLocation,
+  type CheckerboardModel,
   type CheckerboardRoomGroup,
-  fetchCheckerboard,
+  type CheckerboardViewMode,
+  formatRangeTitle,
+  navigateAnchor,
+  occupancyForDay,
+  overlapsCalendarDay,
+  viewRange,
 } from "@/lib/checkerboard-api";
-
-type ViewMode = "week" | "month" | "3month";
 
 const LABEL_W = 240;
 const MIN_DAY_PX = 36;
 /** Month view: floor width so the strip is wider than typical main column (~1400px), forcing horizontal scroll for all days. */
 const MONTH_TABLE_MIN_WIDTH = 1500;
 
-function viewRange(anchor: Date, mode: ViewMode): { from: Date; to: Date } {
-  if (mode === "week") {
-    const from = startOfWeek(anchor, { weekStartsOn: 1 });
-    const to = endOfWeek(anchor, { weekStartsOn: 1 });
-    return { from, to };
-  }
-  if (mode === "month") {
-    return { from: startOfMonth(anchor), to: endOfMonth(anchor) };
-  }
-  return {
-    from: startOfMonth(anchor),
-    to: endOfMonth(addMonths(anchor, 2)),
-  };
-}
-
-function navigateAnchor(anchor: Date, mode: ViewMode, dir: -1 | 1): Date {
-  if (mode === "week") return addWeeks(anchor, dir);
-  if (mode === "month") return addMonths(anchor, dir);
-  return addMonths(anchor, dir * 3);
-}
-
-function formatRangeTitle(anchor: Date, mode: ViewMode): string {
-  if (mode === "week") {
-    const from = startOfWeek(anchor, { weekStartsOn: 1 });
-    const to = endOfWeek(anchor, { weekStartsOn: 1 });
-    return `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`;
-  }
-  if (mode === "month") {
-    return format(anchor, "MMMM yyyy");
-  }
-  const from = startOfMonth(anchor);
-  const to = endOfMonth(addMonths(anchor, 2));
-  return `${format(from, "MMM yyyy")} – ${format(to, "MMM yyyy")}`;
-}
-
-function overlapsCalendarDay(booking: CheckerboardBooking, day: Date): boolean {
-  const ds = startOfDay(day);
-  const de = endOfDay(day);
-  return booking.start <= de && booking.end >= ds;
-}
-
-function occupancyForDay(
-  beds: CheckerboardBed[],
-  day: Date,
-): { occupied: number; total: number } {
-  const total = beds.length;
-  if (total === 0) return { occupied: 0, total: 0 };
-  const occupied = beds.filter((bed) =>
-    bed.bookings.some((b) => overlapsCalendarDay(b, day)),
-  ).length;
-  return { occupied, total };
-}
+export type EcoSmartCheckerboardProps = {
+  anchor: Date;
+  view: CheckerboardViewMode;
+  location: CheckerboardLocation;
+  onAnchorChange: Dispatch<SetStateAction<Date>>;
+  onViewChange: Dispatch<SetStateAction<CheckerboardViewMode>>;
+  onLocationChange: Dispatch<SetStateAction<CheckerboardLocation>>;
+  data: CheckerboardModel | undefined;
+  isLoading: boolean;
+  error: Error | null;
+};
 
 function bookingSpanInView(
   booking: CheckerboardBooking,
@@ -210,31 +158,26 @@ function BookingInfoHover({
   );
 }
 
-export function EcoSmartCheckerboard() {
-  const [anchor, setAnchor] = useState(() => new Date());
-  const [view, setView] = useState<ViewMode>("month");
-  const [location, setLocation] = useState<CheckerboardLocation>("mp");
+export function EcoSmartCheckerboard({
+  anchor,
+  view,
+  location,
+  onAnchorChange,
+  onViewChange,
+  onLocationChange,
+  data,
+  isLoading,
+  error,
+}: EcoSmartCheckerboardProps) {
+  const days = useMemo(() => {
+    const { from, to } = viewRange(anchor, view);
+    return eachDayOfInterval({ start: from, end: to });
+  }, [anchor, view]);
 
-  const { from, to } = useMemo(() => viewRange(anchor, view), [anchor, view]);
-  const days = useMemo(
-    () => eachDayOfInterval({ start: from, end: to }),
-    [from, to],
-  );
   const numDays = days.length;
 
   const today = new Date();
   const todayIndex = days.findIndex((d) => isSameDay(d, today));
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: [CHECKERBOARD_QUERY_KEY, location, from.toISOString(), to.toISOString()],
-    queryFn: () =>
-      fetchCheckerboard({
-        location,
-        fromDate: from,
-        toDate: to,
-      }),
-    staleTime: 120_000,
-  });
 
   const { gridTemplate, tableWidth, dayColPx } = useMemo(() => {
     const natural = LABEL_W + numDays * MIN_DAY_PX;
@@ -264,7 +207,7 @@ export function EcoSmartCheckerboard() {
           <div className="flex w-full justify-start">
             <Tabs
               value={location}
-              onValueChange={(v) => v && setLocation(v as CheckerboardLocation)}
+              onValueChange={(v) => v && onLocationChange(v as CheckerboardLocation)}
             >
               <TabsList className="h-auto w-fit justify-start gap-2 bg-transparent p-0 text-muted-foreground">
                 <TabsTrigger value="mp" className={locationTabTriggerClassName}>
@@ -284,7 +227,7 @@ export function EcoSmartCheckerboard() {
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 shrink-0"
-                onClick={() => setAnchor((a) => navigateAnchor(a, view, -1))}
+                onClick={() => onAnchorChange((a) => navigateAnchor(a, view, -1))}
                 aria-label="Previous period"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -297,7 +240,7 @@ export function EcoSmartCheckerboard() {
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 shrink-0"
-                onClick={() => setAnchor((a) => navigateAnchor(a, view, 1))}
+                onClick={() => onAnchorChange((a) => navigateAnchor(a, view, 1))}
                 aria-label="Next period"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -307,7 +250,7 @@ export function EcoSmartCheckerboard() {
                 variant="ghost"
                 size="sm"
                 className="text-xs text-muted-foreground"
-                onClick={() => setAnchor(new Date())}
+                onClick={() => onAnchorChange(new Date())}
               >
                 Today
               </Button>
@@ -316,7 +259,7 @@ export function EcoSmartCheckerboard() {
             <ToggleGroup
               type="single"
               value={view}
-              onValueChange={(v) => v && setView(v as ViewMode)}
+              onValueChange={(v) => v && onViewChange(v as CheckerboardViewMode)}
               variant="outline"
               size="sm"
               className="justify-end"
