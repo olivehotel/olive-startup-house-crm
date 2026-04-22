@@ -111,8 +111,15 @@ export interface Pagination {
 export interface Communication {
   id: string;
   contact_name: string;
-  channel_id: CommunicationChannelId;
-  status_id: CommunicationStatusId;
+  /** Flat FK (legacy); API may only send `status` / `channel` objects. */
+  channel_id?: CommunicationChannelId;
+  status_id?: CommunicationStatusId;
+  /** Nested from PostgREST / custom API, e.g. { id, value } */
+  channel?: { id?: string; value?: string } | string;
+  status?: { id?: string; value?: string } | string;
+  /** Optional denormalized labels from API */
+  channel_label?: string;
+  status_label?: string;
   main_mail?: string;
 }
 
@@ -476,8 +483,14 @@ export interface CommunicationDetail {
   contact_name: string;
   contact_email: string;
   last_message_at: string;
-  status_id: CommunicationStatusId;
-  channel_id: CommunicationChannelId;
+  /** Flat FK (legacy); API may only send `status` / `channel` objects. */
+  status_id?: CommunicationStatusId;
+  channel_id?: CommunicationChannelId;
+  /** Nested from PostgREST / custom API, e.g. { id, value } */
+  channel?: { id?: string; value?: string } | string;
+  status?: { id?: string; value?: string } | string;
+  channel_label?: string;
+  status_label?: string;
   main_mail?: string;
   /** Set when this communication is linked to a CRM lead */
   lead_id?: string | null;

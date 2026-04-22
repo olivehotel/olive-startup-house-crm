@@ -22,7 +22,11 @@ import {
 } from "@/lib/invoice-links-supabase";
 import { getLeadStatusBadgeClass } from "@/lib/lead-status-badge-classes";
 import { getCommunityDocuments, getClientDocuments } from "@/actions/community";
-import { communicationChannels, communicationStatuses } from "@shared/schema";
+import {
+  getCommunicationChannelLabel,
+  getCommunicationStatusLabel,
+  getCommunicationStatusStyleKey,
+} from "@/lib/communication-labels";
 import type {
   CommunicationMessage,
   CommunicationMessageAttachment,
@@ -774,15 +778,16 @@ export default function CommunicationMessagesPage() {
   const messageTotal =
     firstPage?.pagination?.total ?? firstPage?.count ?? sortedMessages.length;
 
-  const channelLabel = comm
-    ? communicationChannels[comm.channel_id]
-    : undefined;
-  const statusLabel = comm
-    ? communicationStatuses[comm.status_id]
-    : undefined;
-  const statusClassName = statusLabel
-    ? statusColors[statusLabel] ?? "bg-muted text-muted-foreground"
-    : undefined;
+  const channelLabel = comm ? getCommunicationChannelLabel(comm) : undefined;
+  const statusLabel = comm ? getCommunicationStatusLabel(comm) : undefined;
+  const statusStyleKey = comm
+    ? getCommunicationStatusStyleKey(comm)
+    : null;
+  const statusClassName = statusStyleKey
+    ? (statusColors[statusStyleKey] ?? "bg-muted text-muted-foreground")
+    : comm
+      ? "bg-muted text-muted-foreground"
+      : undefined;
 
   const commonDocsQuery = useQuery({
     queryKey: ["community-documents", "common", pageCommon],
@@ -1166,7 +1171,7 @@ export default function CommunicationMessagesPage() {
                   {channelLabel}
                 </Badge>
               )}
-              {statusLabel && (
+              {comm && statusLabel && (
                 <Badge
                   variant="secondary"
                   className={cn("text-xs shrink-0", statusClassName)}

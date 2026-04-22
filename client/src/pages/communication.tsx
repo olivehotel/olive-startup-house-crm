@@ -1,9 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommunicationCard } from "@/components/communication-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -29,6 +27,10 @@ import { useLocation } from "wouter";
 import { communicationChannels, communicationStatuses } from "@shared/schema";
 import type { Communication, CommunicationStats } from "@shared/schema";
 import { getCommunications } from "@/actions/communications";
+import {
+  getCommunicationChannelId,
+  getCommunicationStatusId,
+} from "@/lib/communication-labels";
 
 export default function CommunicationPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,8 +53,10 @@ export default function CommunicationPage() {
 
   const filteredComms = communications?.filter((comm) => {
     const matchesSearch = (comm.contact_name ?? "").toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === "all" || comm.channel_id === typeFilter;
-    const matchesStatus = statusFilter === "all" || comm.status_id === statusFilter;
+    const chId = getCommunicationChannelId(comm);
+    const stId = getCommunicationStatusId(comm);
+    const matchesType = typeFilter === "all" || chId === typeFilter;
+    const matchesStatus = statusFilter === "all" || stId === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
   });
   const toursCount = (stats?.videoTours || 0) + (stats?.inPersonTours || 0);
@@ -105,25 +109,6 @@ export default function CommunicationPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Activity Summary */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3">
-            <Badge variant="secondary" className="py-1.5 px-3">
-              All Activity <span className="ml-1 font-bold">{stats?.totalActivity || 0}</span>
-            </Badge>
-            <Badge variant="secondary" className="py-1.5 px-3 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              In Progress <span className="ml-1 font-bold">{stats?.inProgress || 0}</span>
-            </Badge>
-            <Badge variant="secondary" className="py-1.5 px-3 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-              <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
-              Processed <span className="ml-1 font-bold">{stats?.processed || 0}</span>
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Filters */}
       <Card>
