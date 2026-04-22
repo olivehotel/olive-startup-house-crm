@@ -14,18 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus,
   Search,
-  Filter,
   MessageSquare,
   Phone,
-  Video,
-  Users,
-  Mail,
-  FileText,
-  Link,
-  CheckCircle,
   Calendar,
+  Receipt,
+  RefreshCw,
+  CheckCheck,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -60,6 +55,7 @@ export default function CommunicationPage() {
     const matchesStatus = statusFilter === "all" || comm.status_id === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
   });
+  const toursCount = (stats?.videoTours || 0) + (stats?.inPersonTours || 0);
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
@@ -69,49 +65,43 @@ export default function CommunicationPage() {
           <h1 className="text-2xl font-bold">Communication Center</h1>
           <p className="text-muted-foreground">Manage all prospect communications across multiple channels</p>
         </div>
-        <div className="flex gap-2">
-          <Button data-testid="button-new-communication">
-            <Plus className="h-4 w-4 mr-2" />
-            New Communication
-          </Button>
-        </div>
       </div>
 
-      {/* Channel Stats */}
+      {/* Communication Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         <Card className="hover-elevate cursor-pointer">
           <CardContent className="p-4 text-center">
-            <MessageSquare className="h-6 w-6 mx-auto text-blue-600 dark:text-blue-400" />
-            <p className="text-2xl font-bold mt-2">{stats?.textMessages || 0}</p>
-            <p className="text-sm text-muted-foreground">Text Messages</p>
+            <RefreshCw className="h-6 w-6 mx-auto text-blue-600 dark:text-blue-400" />
+            <p className="text-2xl font-bold mt-2">{stats?.inProgress || 0}</p>
+            <p className="text-sm text-muted-foreground">In Progress</p>
           </CardContent>
         </Card>
         <Card className="hover-elevate cursor-pointer">
           <CardContent className="p-4 text-center">
-            <Phone className="h-6 w-6 mx-auto text-emerald-600 dark:text-emerald-400" />
+            <CheckCheck className="h-6 w-6 mx-auto text-emerald-600 dark:text-emerald-400" />
+            <p className="text-2xl font-bold mt-2">{stats?.processed || 0}</p>
+            <p className="text-sm text-muted-foreground">Processed</p>
+          </CardContent>
+        </Card>
+        <Card className="hover-elevate cursor-pointer">
+          <CardContent className="p-4 text-center">
+            <Phone className="h-6 w-6 mx-auto text-purple-600 dark:text-purple-400" />
             <p className="text-2xl font-bold mt-2">{stats?.phoneCalls || 0}</p>
             <p className="text-sm text-muted-foreground">Phone Calls</p>
           </CardContent>
         </Card>
         <Card className="hover-elevate cursor-pointer">
           <CardContent className="p-4 text-center">
-            <Video className="h-6 w-6 mx-auto text-purple-600 dark:text-purple-400" />
-            <p className="text-2xl font-bold mt-2">{stats?.videoTours || 0}</p>
-            <p className="text-sm text-muted-foreground">Video Tours</p>
+            <Calendar className="h-6 w-6 mx-auto text-amber-600 dark:text-amber-400" />
+            <p className="text-2xl font-bold mt-2">{toursCount}</p>
+            <p className="text-sm text-muted-foreground">Tours</p>
           </CardContent>
         </Card>
         <Card className="hover-elevate cursor-pointer">
           <CardContent className="p-4 text-center">
-            <Users className="h-6 w-6 mx-auto text-amber-600 dark:text-amber-400" />
-            <p className="text-2xl font-bold mt-2">{stats?.inPersonTours || 0}</p>
-            <p className="text-sm text-muted-foreground">In-Person Tours</p>
-          </CardContent>
-        </Card>
-        <Card className="hover-elevate cursor-pointer">
-          <CardContent className="p-4 text-center">
-            <Mail className="h-6 w-6 mx-auto text-red-600 dark:text-red-400" />
-            <p className="text-2xl font-bold mt-2">{stats?.emails || 0}</p>
-            <p className="text-sm text-muted-foreground">Emails</p>
+            <Receipt className="h-6 w-6 mx-auto text-red-600 dark:text-red-400" />
+            <p className="text-2xl font-bold mt-2">{stats?.invoicesSend || 0}</p>
+            <p className="text-sm text-muted-foreground">Invoices send</p>
           </CardContent>
         </Card>
       </div>
@@ -124,20 +114,12 @@ export default function CommunicationPage() {
               All Activity <span className="ml-1 font-bold">{stats?.totalActivity || 0}</span>
             </Badge>
             <Badge variant="secondary" className="py-1.5 px-3 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              <FileText className="h-3.5 w-3.5 mr-1.5" />
-              Docs Pending <span className="ml-1 font-bold">{stats?.docsPending || 0}</span>
-            </Badge>
-            <Badge variant="secondary" className="py-1.5 px-3 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-              <Link className="h-3.5 w-3.5 mr-1.5" />
-              Links Sent <span className="ml-1 font-bold">{stats?.linksSent || 0}</span>
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              In Progress <span className="ml-1 font-bold">{stats?.inProgress || 0}</span>
             </Badge>
             <Badge variant="secondary" className="py-1.5 px-3 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-              Forms Filled <span className="ml-1 font-bold">{stats?.formsFilled || 0}</span>
-            </Badge>
-            <Badge variant="secondary" className="py-1.5 px-3 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-              <Calendar className="h-3.5 w-3.5 mr-1.5" />
-              Tours Scheduled <span className="ml-1 font-bold">{stats?.toursScheduled || 0}</span>
+              <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
+              Processed <span className="ml-1 font-bold">{stats?.processed || 0}</span>
             </Badge>
           </div>
         </CardContent>

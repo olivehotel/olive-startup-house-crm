@@ -28,12 +28,10 @@ import {
   Plus,
   MessageSquare,
   Phone,
-  Video,
   Calendar,
-  Mail,
-  FileText,
-  Link as LinkIcon,
-  CheckCircle,
+  Receipt,
+  RefreshCw,
+  CheckCheck,
   TrendingUp,
   ArrowRight,
   DollarSign,
@@ -104,6 +102,7 @@ export default function Dashboard() {
   const occupiedBeds = properties?.reduce((sum, p) => sum + p.occupiedBeds, 0) || 0;
   const totalRooms = properties?.reduce((sum, p) => sum + p.totalRooms, 0) || 0;
   const occupiedRooms = properties?.reduce((sum, p) => sum + p.occupiedRooms, 0) || 0;
+  const communicationTours = (commStats?.videoTours || 0) + (commStats?.inPersonTours || 0);
   const bedOccupancy = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
   const roomOccupancy = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
 
@@ -192,29 +191,29 @@ export default function Dashboard() {
             {/* Communication Stats */}
             <div className="grid grid-cols-5 gap-1 sm:gap-2">
               <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
-                <MessageSquare className="h-4 w-4 mx-auto text-muted-foreground" />
-                <p className="text-lg font-bold mt-1">{commStats?.textMessages || 0}</p>
-                <p className="text-xs text-muted-foreground">Text</p>
+                <RefreshCw className="h-4 w-4 mx-auto text-muted-foreground" />
+                <p className="text-lg font-bold mt-1">{commStats?.inProgress || 0}</p>
+                <p className="text-xs text-muted-foreground">In Progress</p>
+              </div>
+              <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
+                <CheckCheck className="h-4 w-4 mx-auto text-muted-foreground" />
+                <p className="text-lg font-bold mt-1">{commStats?.processed || 0}</p>
+                <p className="text-xs text-muted-foreground">Processed</p>
               </div>
               <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Phone className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{commStats?.phoneCalls || 0}</p>
-                <p className="text-xs text-muted-foreground">Calls</p>
-              </div>
-              <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
-                <Video className="h-4 w-4 mx-auto text-muted-foreground" />
-                <p className="text-lg font-bold mt-1">{commStats?.videoTours || 0}</p>
-                <p className="text-xs text-muted-foreground">Video</p>
+                <p className="text-xs text-muted-foreground">Phone Calls</p>
               </div>
               <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Calendar className="h-4 w-4 mx-auto text-muted-foreground" />
-                <p className="text-lg font-bold mt-1">{commStats?.inPersonTours || 0}</p>
+                <p className="text-lg font-bold mt-1">{communicationTours}</p>
                 <p className="text-xs text-muted-foreground">Tours</p>
               </div>
               <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
-                <Mail className="h-4 w-4 mx-auto text-muted-foreground" />
-                <p className="text-lg font-bold mt-1">{commStats?.emails || 0}</p>
-                <p className="text-xs text-muted-foreground">Emails</p>
+                <Receipt className="h-4 w-4 mx-auto text-muted-foreground" />
+                <p className="text-lg font-bold mt-1">{commStats?.invoicesSend || 0}</p>
+                <p className="text-xs text-muted-foreground">Invoices send</p>
               </div>
             </div>
 
@@ -222,20 +221,12 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-2">
               <Badge variant="secondary">All Activity {commStats?.totalActivity || 0}</Badge>
               <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                <FileText className="h-3 w-3 mr-1" />
-                Docs Pending {commStats?.docsPending || 0}
-              </Badge>
-              <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                <LinkIcon className="h-3 w-3 mr-1" />
-                Links Sent {commStats?.linksSent || 0}
+                <RefreshCw className="h-3 w-3 mr-1" />
+                In Progress {commStats?.inProgress || 0}
               </Badge>
               <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <CheckCircle className="h-3 w-3 mr-1" />
-                Forms Filled {commStats?.formsFilled || 0}
-              </Badge>
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                <Calendar className="h-3 w-3 mr-1" />
-                Tours Scheduled {commStats?.toursScheduled || 0}
+                <CheckCheck className="h-3 w-3 mr-1" />
+                Processed {commStats?.processed || 0}
               </Badge>
             </div>
 
@@ -293,6 +284,8 @@ export default function Dashboard() {
                 <TabsTrigger value="new">New {leads?.filter(l => l.status === "New").length || 0}</TabsTrigger>
                 <TabsTrigger value="contacted">Contacted {leads?.filter(l => l.status === "Contacted").length || 0}</TabsTrigger>
                 <TabsTrigger value="qualified">Qualified {leads?.filter(l => l.status === "Qualified").length || 0}</TabsTrigger>
+                <TabsTrigger value="converted">Converted {leads?.filter(l => l.status === "Converted").length || 0}</TabsTrigger>
+                <TabsTrigger value="registered">Registered {leads?.filter(l => l.status === "Registered").length || 0}</TabsTrigger>
               </TabsList>
               <TabsContent value="all" className="mt-4">
                 {leadsLoading ? (
@@ -344,6 +337,38 @@ export default function Dashboard() {
                 ) : (() => {
                     const rows = (leads ?? [])
                       .filter((l) => l.status === "Qualified")
+                      .slice(0, 5);
+                    return rows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2">
+                        No leads in this stage.
+                      </p>
+                    ) : (
+                      <LeadsPipelineResponsive leads={rows} variant="embedded" />
+                    );
+                  })()}
+              </TabsContent>
+              <TabsContent value="converted" className="mt-4">
+                {leadsLoading ? (
+                  <LeadsPipelineSkeletons tableRows={4} mobileRows={4} />
+                ) : (() => {
+                    const rows = (leads ?? [])
+                      .filter((l) => l.status === "Converted")
+                      .slice(0, 5);
+                    return rows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2">
+                        No leads in this stage.
+                      </p>
+                    ) : (
+                      <LeadsPipelineResponsive leads={rows} variant="embedded" />
+                    );
+                  })()}
+              </TabsContent>
+              <TabsContent value="registered" className="mt-4">
+                {leadsLoading ? (
+                  <LeadsPipelineSkeletons tableRows={4} mobileRows={4} />
+                ) : (() => {
+                    const rows = (leads ?? [])
+                      .filter((l) => l.status === "Registered")
                       .slice(0, 5);
                     return rows.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-2">

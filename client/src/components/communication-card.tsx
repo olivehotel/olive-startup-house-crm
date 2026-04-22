@@ -9,11 +9,7 @@ import {
   Video,
   Users,
   Mail,
-  FileText,
-  Link,
   CheckCircle,
-  Sparkles,
-  Clock,
   RefreshCw,
 } from "lucide-react";
 
@@ -32,33 +28,15 @@ const typeIcons: Record<string, React.ReactNode> = {
 
 const statusConfig: Record<string, { icon: React.ReactNode; color: string }> =
   {
-    "Docs Requested": {
-      icon: <FileText className="h-3 w-3" />,
-      color:
-        "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-    },
     "In Progress": {
       icon: <RefreshCw className="h-3 w-3" />,
       color:
         "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
     },
-    "Link Sent": {
-      icon: <Link className="h-3 w-3" />,
-      color:
-        "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    },
-    "Form Filled": {
+    Processed: {
       icon: <CheckCircle className="h-3 w-3" />,
       color:
         "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-    },
-    Pending: {
-      icon: <Clock className="h-3 w-3" />,
-      color: "bg-muted text-muted-foreground",
-    },
-    Completed: {
-      icon: <Sparkles className="h-3 w-3" />,
-      color: "bg-primary/10 text-primary",
     },
   };
 
@@ -74,7 +52,10 @@ export function CommunicationCard({
 
   const channelLabel = communicationChannels[communication.channel_id];
   const statusLabel = communicationStatuses[communication.status_id];
-  const statusStyle = statusConfig[statusLabel] ?? statusConfig["Pending"];
+  const statusStyle = statusConfig[statusLabel] ?? {
+    icon: <RefreshCw className="h-3 w-3" />,
+    color: "bg-muted text-muted-foreground",
+  };
 
 
   return (

@@ -93,10 +93,7 @@ import DOMPurify from "dompurify";
 
 const statusColors: Record<string, string> = {
   "In Progress": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  "Docs Requested": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  "Link Sent": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-  "Form Filled": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  "Completed": "bg-primary/10 text-primary",
+  Processed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
 };
 
 /** YouTube tours opened from Quick actions → Video tour */
@@ -108,8 +105,8 @@ const VIDEO_TOUR_OPTIONS = [
   },
   {
     id: "tour-2",
-    label: "San Francisco",
-    url: "https://www.youtube.com/watch?v=hKF2s49awQA",
+    label: "Menlo Park",
+    url: "https://youtu.be/Cizis6PtLI4?si=0lH1sMtNZOeVKVw1",
   },
 ] as const;
 
@@ -783,6 +780,9 @@ export default function CommunicationMessagesPage() {
   const statusLabel = comm
     ? communicationStatuses[comm.status_id]
     : undefined;
+  const statusClassName = statusLabel
+    ? statusColors[statusLabel] ?? "bg-muted text-muted-foreground"
+    : undefined;
 
   const commonDocsQuery = useQuery({
     queryKey: ["community-documents", "common", pageCommon],
@@ -1169,7 +1169,7 @@ export default function CommunicationMessagesPage() {
               {statusLabel && (
                 <Badge
                   variant="secondary"
-                  className={cn("text-xs shrink-0", statusColors[statusLabel])}
+                  className={cn("text-xs shrink-0", statusClassName)}
                 >
                   {statusLabel}
                 </Badge>
