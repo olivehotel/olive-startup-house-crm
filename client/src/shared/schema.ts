@@ -439,6 +439,29 @@ export const insertProfileSchema = z.object({
 
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 
+/** Row in `user_roles` (read client-side for gating) */
+export const appUserRoles = ["admin", "manager", "client"] as const;
+export type AppUserRole = (typeof appUserRoles)[number];
+
+/** Communication thread → `community_add_profile` JSON (onboarding) */
+export const createCommunityAccountSchema = z.object({
+  full_name: z.string().min(1, "Required"),
+  email: z.string().min(1, "Required").email("Invalid email"),
+  linkedin_url: z
+    .string()
+    .min(1, "Required")
+    .url("Valid LinkedIn URL required"),
+});
+
+export type CreateCommunityAccountForm = z.infer<typeof createCommunityAccountSchema>;
+
+/** From `get_community_profiles_admin` — may include guest magic links (managers/admins only) */
+export interface CommunityProfileAdmin extends CommunityProfile {
+  magic_link?: string | null;
+  guest_magic_link?: string | null;
+  invite_url?: string | null;
+}
+
 // Community Stats
 export interface CommunityStats {
   activeMembers: number;
