@@ -126,6 +126,7 @@ export default function LeadsPage() {
     Qualified: leads?.filter(l => l.status === "Qualified").length || 0,
     "Payment Pending": leads?.filter(matchesPaymentPendingTab).length || 0,
     Converted: leads?.filter(l => l.status === "Converted").length || 0,
+    Registered: leads?.filter(l => l.status === "Registered").length || 0,
   };
 
   const newThisWeekCount = useMemo(() => {
@@ -319,6 +320,17 @@ export default function LeadsPage() {
                     <span>Converted</span>
                     <Badge variant="secondary" className="ml-0 md:ml-2 shrink-0">
                       {leadsByStatus.Converted}
+                    </Badge>
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="Registered"
+                  className="w-full min-h-[2.75rem] justify-center px-2 py-2 text-center whitespace-normal md:min-h-0 md:h-10 md:w-auto md:px-3 md:py-1.5 md:whitespace-nowrap"
+                >
+                  <span className="flex flex-col items-center gap-0.5 leading-tight md:inline-flex md:flex-row md:items-center md:gap-0 md:leading-normal">
+                    <span>Registered</span>
+                    <Badge variant="secondary" className="ml-0 md:ml-2 shrink-0">
+                      {leadsByStatus.Registered}
                     </Badge>
                   </span>
                 </TabsTrigger>

@@ -49,3 +49,10 @@ export function createLead(body: CreateLeadBody) {
     body,
   });
 }
+
+export function qualifyLead(leadId: string) {
+  return apiFetch<Record<string, unknown>>("qualify-lead", {
+    method: "POST",
+    body: { lead_id: leadId },
+  });
+}

@@ -2,6 +2,8 @@ import type { LeadStatus } from "@shared/schema";
 
 export const LEAD_STATUS_BADGE_CLASSES: Record<LeadStatus, string> = {
   New: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  Registered:
+    "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
   Contacted:
     "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
   Qualified:

@@ -2,18 +2,18 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { Communication } from "@shared/schema";
-import { communicationChannels, communicationStatuses } from "@shared/schema";
+import {
+  getCommunicationChannelLabel,
+  getCommunicationStatusLabel,
+  getCommunicationStatusStyleKey,
+} from "@/lib/communication-labels";
 import {
   MessageSquare,
   Phone,
   Video,
   Users,
   Mail,
-  FileText,
-  Link,
   CheckCircle,
-  Sparkles,
-  Clock,
   RefreshCw,
 } from "lucide-react";
 
@@ -32,33 +32,15 @@ const typeIcons: Record<string, React.ReactNode> = {
 
 const statusConfig: Record<string, { icon: React.ReactNode; color: string }> =
   {
-    "Docs Requested": {
-      icon: <FileText className="h-3 w-3" />,
-      color:
-        "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-    },
     "In Progress": {
       icon: <RefreshCw className="h-3 w-3" />,
       color:
         "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
     },
-    "Link Sent": {
-      icon: <Link className="h-3 w-3" />,
-      color:
-        "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    },
-    "Form Filled": {
+    Processed: {
       icon: <CheckCircle className="h-3 w-3" />,
       color:
         "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-    },
-    Pending: {
-      icon: <Clock className="h-3 w-3" />,
-      color: "bg-muted text-muted-foreground",
-    },
-    Completed: {
-      icon: <Sparkles className="h-3 w-3" />,
-      color: "bg-primary/10 text-primary",
     },
   };
 
@@ -72,9 +54,15 @@ export function CommunicationCard({
     .join("")
     .toUpperCase();
 
-  const channelLabel = communicationChannels[communication.channel_id];
-  const statusLabel = communicationStatuses[communication.status_id];
-  const statusStyle = statusConfig[statusLabel] ?? statusConfig["Pending"];
+  const channelLabel = getCommunicationChannelLabel(communication);
+  const statusLabel = getCommunicationStatusLabel(communication);
+  const statusStyleKey = getCommunicationStatusStyleKey(communication);
+  const statusStyle = statusStyleKey
+    ? statusConfig[statusStyleKey]
+    : {
+        icon: <RefreshCw className="h-3 w-3" />,
+        color: "bg-muted text-muted-foreground",
+      };
 
 
   return (
@@ -94,15 +82,18 @@ export function CommunicationCard({
           <div className="flex items-start justify-between gap-2">
             <div>
               <h4 className="font-medium text-sm leading-tight">{communication.contact_name}</h4>
-              <Badge
-                variant="secondary"
-                className={cn("mt-2 text-xs", statusStyle.color)}
-              >
-                {statusStyle.icon}
-                <span className="ml-1">{statusLabel}</span>
-              </Badge>
+              {statusLabel ? (
+                <Badge
+                  variant="secondary"
+                  className={cn("mt-2 text-xs", statusStyle.color)}
+                >
+                  {statusStyle.icon}
+                  <span className="ml-1">{statusLabel}</span>
+                </Badge>
+              ) : null}
             </div>
             <div className="flex flex-col items-end gap-1 min-w-0 max-w-[45%]">
+              {channelLabel ? (
               <Badge
                 variant="outline"
                 className="text-xs flex items-center gap-1 px-2 py-0.5 border-border bg-muted/40 text-foreground font-normal"
@@ -110,6 +101,7 @@ export function CommunicationCard({
                 {typeIcons[channelLabel]}
                 {channelLabel}
               </Badge>
+              ) : null}
               {communication.main_mail && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1 min-w-0 w-full">
                   <Mail className="h-3 w-3 shrink-0" />

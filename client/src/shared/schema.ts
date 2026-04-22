@@ -24,6 +24,7 @@ export const leadStatuses = [
   "Qualified",
   "Payment Pending",
   "Converted",
+  "Registered",
   "Lost",
 ] as const;
 export type LeadStatus = typeof leadStatuses[number];
@@ -31,6 +32,7 @@ export type LeadStatus = typeof leadStatuses[number];
 // Lead statuses (Supabase `lead_statuses.id` → label). Lost has no id in app yet.
 export const leadStatusIds = {
   "04f84734-b0f8-4701-9a4c-5cc245dab5e2": "New",
+  "043b7f5a-a3fc-4c15-b423-3e2a521696ff": "Registered",
   "a23c166c-7f48-49ed-b47e-397649f3b06a": "Contacted",
   "ac064815-cb42-445d-a247-6e05e3fe22d8": "Qualified",
   "2e210653-93d7-40ab-a0d9-6a9296a3c0a9": "Payment Pending",
@@ -89,12 +91,8 @@ export type CommunicationChannelValue = typeof communicationChannels[Communicati
 
 // Communication Statuses (UUID → label)
 export const communicationStatuses = {
-  "1e97f499-e9a7-483a-a600-7958d3b86e11": "Form Filled",
-  "4ac23f91-2d5a-483b-8dea-59b2b9629800": "Docs Requested",
   "64d9e4e4-22c3-4383-a2b8-5a7b1be755e5": "In Progress",
-  "8e39cddd-1ab3-43e4-baf4-1e538c02c347": "Pending",
-  "e95c2a25-a4b4-4cbb-855c-6246cdf0aaf9": "Completed",
-  "eee82c30-bdfc-4a42-86e7-f2a995ae5097": "Link Sent",
+  "6841d608-1995-4be3-a73e-1a4760f931a6": "Processed",
 } as const;
 
 export type CommunicationStatusId = keyof typeof communicationStatuses;
@@ -113,8 +111,15 @@ export interface Pagination {
 export interface Communication {
   id: string;
   contact_name: string;
-  channel_id: CommunicationChannelId;
-  status_id: CommunicationStatusId;
+  /** Flat FK (legacy); API may only send `status` / `channel` objects. */
+  channel_id?: CommunicationChannelId;
+  status_id?: CommunicationStatusId;
+  /** Nested from PostgREST / custom API, e.g. { id, value } */
+  channel?: { id?: string; value?: string } | string;
+  status?: { id?: string; value?: string } | string;
+  /** Optional denormalized labels from API */
+  channel_label?: string;
+  status_label?: string;
   main_mail?: string;
 }
 
@@ -345,10 +350,9 @@ export interface CommunicationStats {
   inPersonTours: number;
   emails: number;
   totalActivity: number;
-  docsPending: number;
-  linksSent: number;
-  formsFilled: number;
-  toursScheduled: number;
+  inProgress: number;
+  processed: number;
+  invoicesSend?: number;
 }
 
 // Community Material Types (UUID → value)
@@ -479,8 +483,14 @@ export interface CommunicationDetail {
   contact_name: string;
   contact_email: string;
   last_message_at: string;
-  status_id: CommunicationStatusId;
-  channel_id: CommunicationChannelId;
+  /** Flat FK (legacy); API may only send `status` / `channel` objects. */
+  status_id?: CommunicationStatusId;
+  channel_id?: CommunicationChannelId;
+  /** Nested from PostgREST / custom API, e.g. { id, value } */
+  channel?: { id?: string; value?: string } | string;
+  status?: { id?: string; value?: string } | string;
+  channel_label?: string;
+  status_label?: string;
   main_mail?: string;
   /** Set when this communication is linked to a CRM lead */
   lead_id?: string | null;
