@@ -14,7 +14,7 @@ import {
   getCommunicationMessages,
   sendEmailMessage,
 } from "@/actions/communications";
-import { qualifyLead } from "@/actions/leads";
+import { getQualifyLeadErrorMessage, qualifyLead } from "@/actions/leads";
 import { fetchLeadByIdFromSupabase, LEADS_QUERY_KEY } from "@/lib/leads-supabase";
 import {
   bodyContainsInvoiceLink,
@@ -1061,7 +1061,7 @@ export default function CommunicationMessagesPage() {
     onError: (err: Error) => {
       toast({
         title: "Could not confirm payment",
-        description: err.message,
+        description: getQualifyLeadErrorMessage(err),
         variant: "destructive",
       });
     },

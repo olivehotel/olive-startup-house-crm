@@ -56,3 +56,48 @@ export function qualifyLead(leadId: string) {
     body: { lead_id: leadId },
   });
 }
+
+const QUALIFY_409_HIGHER_STATUS =
+  "This lead is already at a higher status than this step, so payment confirmation is not needed.";
+
+function isHigherStatusConflictMessage(apiError: string): boolean {
+  const t = apiError.toLowerCase();
+  return (
+    t.includes("higher status") ||
+    t.includes("cannot set to qualified") ||
+    t.includes("already at a")
+  );
+}
+
+/** Maps apiFetch `Error` messages (e.g. `409: {"error":"…"}`) to user-facing copy. */
+export function getQualifyLeadErrorMessage(error: unknown): string {
+  if (!(error instanceof Error) || !error.message) {
+    if (typeof error === "string" && error) return error;
+    return "Something went wrong. Please try again.";
+  }
+
+  const m = error.message;
+  const match = /^(\d{3}):\s*([\s\S]+)$/.exec(m);
+  if (!match) return m;
+
+  const status = match[1];
+  const rest = match[2].trim();
+
+  if (status === "409") {
+    try {
+      const parsed = JSON.parse(rest) as { error?: string };
+      const errText = typeof parsed.error === "string" ? parsed.error : "";
+      if (isHigherStatusConflictMessage(errText)) {
+        return QUALIFY_409_HIGHER_STATUS;
+      }
+      if (errText) {
+        return errText;
+      }
+    } catch {
+      // not JSON
+    }
+    return "This change is not allowed for the lead in its current state.";
+  }
+
+  return m;
+}
