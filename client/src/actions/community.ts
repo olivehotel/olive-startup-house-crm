@@ -4,6 +4,7 @@ import type {
   CommunityDocumentAudience,
   CommunityDocumentsPagination,
   CommunityProfile,
+  CommunityProfileAdmin,
   CommunityProfilesPagination,
 } from "@shared/schema";
 
@@ -24,6 +25,25 @@ export const getCommunityProfiles = (page = 1) =>
     "get_community_profiles",
     { params: { page } },
   );
+
+export const getCommunityProfilesAdmin = (page = 1) =>
+  apiFetch<{ profiles: CommunityProfileAdmin[]; pagination: CommunityProfilesPagination }>(
+    "get_community_profiles_admin",
+    { params: { page } },
+  );
+
+export type AddCommunityProfileForLeadPayload = {
+  full_name: string;
+  email: string;
+  linkedin_url: string;
+  lead_id: string;
+};
+
+export const addCommunityProfileForLead = (body: AddCommunityProfileForLeadPayload) =>
+  apiFetch<Record<string, unknown>>("community_add_profile", {
+    method: "POST",
+    body,
+  });
 
 export const deleteCommunityProfile = (profileId: string) =>
   apiFetch<unknown>("community-delete-profile", {

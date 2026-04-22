@@ -20,14 +20,22 @@ import {
   ChevronRight,
   Pencil,
   Trash2,
+  Copy,
 } from "lucide-react";
 import {
   getCommunityProfiles,
+  getCommunityProfilesAdmin,
   editCommunityProfile,
   deleteCommunityProfile,
 } from "@/actions/community";
+import { useUserRole } from "@/hooks/use-user-role";
 import { supabase } from "@/lib/supabase";
-import type { InsertProfile, CommunityProfile, CommunityProfilesPagination } from "@shared/schema";
+import type {
+  InsertProfile,
+  CommunityProfile,
+  CommunityProfileAdmin,
+  CommunityProfilesPagination,
+} from "@shared/schema";
 import { insertProfileSchema } from "@shared/schema";
 import { FileDropZone } from "@/components/file-drop-zone";
 import {
@@ -49,10 +57,11 @@ import {
 
 export function CommunityProfiles() {
   const { toast } = useToast();
+  const { canViewCommunityAdminProfiles, isLoading: userRoleLoading } = useUserRole();
   const [showAddProfileForm, setShowAddProfileForm] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [profiles, setProfiles] = useState<CommunityProfile[]>([]);
+  const [profiles, setProfiles] = useState<CommunityProfileAdmin[]>([]);
   const [pagination, setPagination] = useState<CommunityProfilesPagination | null>(null);
   const [page, setPage] = useState(1);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
@@ -78,19 +87,22 @@ export function CommunityProfiles() {
   const loadPage = useCallback(async (p: number) => {
     setLoadingProfiles(true);
     try {
-      const { profiles: list, pagination: pag } = await getCommunityProfiles(p);
-      setProfiles(list ?? []);
+      const { profiles: list, pagination: pag } = canViewCommunityAdminProfiles
+        ? await getCommunityProfilesAdmin(p)
+        : await getCommunityProfiles(p);
+      setProfiles((list as CommunityProfileAdmin[]) ?? []);
       setPagination(pag ?? null);
     } catch {
       setPagination(null);
     } finally {
       setLoadingProfiles(false);
     }
-  }, []);
+  }, [canViewCommunityAdminProfiles]);
 
   useEffect(() => {
+    if (userRoleLoading) return;
     void loadPage(page);
-  }, [page, loadPage]);
+  }, [page, loadPage, userRoleLoading]);
 
   const resetProfileForm = () => {
     profileForm.reset();
@@ -204,8 +216,10 @@ export function CommunityProfiles() {
       toast({ title: "Profile deleted", description: `"${deletingProfile.name}" has been removed.` });
       setDeletingProfile(null);
       const currentPage = page;
-      const { profiles: next, pagination: pag } = await getCommunityProfiles(currentPage);
-      setProfiles(next ?? []);
+      const { profiles: next, pagination: pag } = canViewCommunityAdminProfiles
+        ? await getCommunityProfilesAdmin(currentPage)
+        : await getCommunityProfiles(currentPage);
+      setProfiles((next as CommunityProfileAdmin[]) ?? []);
       setPagination(pag ?? null);
       if ((next?.length ?? 0) === 0 && currentPage > 1) {
         setPage(currentPage - 1);
@@ -340,7 +354,7 @@ export function CommunityProfiles() {
           </div>
         )}
 
-        {loadingProfiles ? (
+        {userRoleLoading || loadingProfiles ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -392,6 +406,35 @@ export function CommunityProfiles() {
                           LinkedIn
                         </a>
                       )}
+                      {canViewCommunityAdminProfiles &&
+                        (() => {
+                          const p = profile as CommunityProfileAdmin;
+                          const link =
+                            (p.magic_link && p.magic_link.trim()) ||
+                            (p.guest_magic_link && p.guest_magic_link.trim()) ||
+                            (p.invite_url && p.invite_url.trim());
+                          if (!link) return null;
+                          return (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await navigator.clipboard.writeText(link);
+                                  toast({ title: "Copied", description: "Magic link copied to clipboard." });
+                                } catch {
+                                  toast({ title: "Copy failed", variant: "destructive" });
+                                }
+                              }}
+                            >
+                              <Copy className="h-3 w-3 mr-1" />
+                              Magic link
+                            </Button>
+                          );
+                        })()}
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 flex-shrink-0">

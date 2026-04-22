@@ -8,12 +8,16 @@ import {
 import { useParams, useLocation, Link } from "wouter";
 import {
   createCalendarEvent,
-  createGuestInvite,
   createLeadFromCommunication,
   COMMUNICATION_MESSAGES_PAGE_SIZE,
   getCommunicationMessages,
   sendEmailMessage,
 } from "@/actions/communications";
+import {
+  addCommunityProfileForLead,
+  getCommunityDocuments,
+  getClientDocuments,
+} from "@/actions/community";
 import { getQualifyLeadErrorMessage, qualifyLead } from "@/actions/leads";
 import { fetchLeadByIdFromSupabase, LEADS_QUERY_KEY } from "@/lib/leads-supabase";
 import {
@@ -22,7 +26,18 @@ import {
   INVOICE_LINKS_QUERY_KEY,
 } from "@/lib/invoice-links-supabase";
 import { getLeadStatusBadgeClass } from "@/lib/lead-status-badge-classes";
-import { getCommunityDocuments, getClientDocuments } from "@/actions/community";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { createCommunityAccountSchema, type CreateCommunityAccountForm } from "@shared/schema";
+import { extractMagicLinkFromApiResponse } from "@/lib/invite-link";
 import {
   getCommunicationChannelLabel,
   getCommunicationStatusLabel,
@@ -84,7 +99,6 @@ import {
   Phone,
   Send,
   Loader2,
-  MailPlus,
   Receipt,
   UserPlus,
   Video,
@@ -125,6 +139,20 @@ const VIDEO_TOUR_OPTIONS = [
 function appendParagraphToBody(prev: string, line: string): string {
   if (!prev.trim()) return line;
   return `${prev.trimEnd()}\n\n${line}`;
+}
+
+function buildGuestInviteEmailSubject(
+  currentSubject: string,
+  messages: CommunicationMessage[],
+): string {
+  const trimmed = currentSubject.trim();
+  if (trimmed) return trimmed;
+  if (messages.length > 0) {
+    const lastSubject = messages[messages.length - 1].subject;
+    if (!lastSubject) return "Guest invite";
+    return lastSubject.startsWith("Re:") ? lastSubject : `Re: ${lastSubject}`;
+  }
+  return "Guest invite";
 }
 
 function formatDate(dateString: string) {
@@ -668,6 +696,9 @@ export default function CommunicationMessagesPage() {
   const [callFormError, setCallFormError] = useState<string | null>(null);
   const scheduleKindRef = useRef<"tour" | "phone">("tour");
 
+  const [createAccountOpen, setCreateAccountOpen] = useState(false);
+  const [createAccountSubmitting, setCreateAccountSubmitting] = useState(false);
+
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [documentPickerTab, setDocumentPickerTab] = useState("common");
   const [pageCommon, setPageCommon] = useState(1);
@@ -727,6 +758,20 @@ export default function CommunicationMessagesPage() {
     queryFn: () => fetchLeadByIdFromSupabase(leadId!),
     enabled: Boolean(communicationId && leadId),
   });
+
+  const createAccountForm = useForm<CreateCommunityAccountForm>({
+    resolver: zodResolver(createCommunityAccountSchema),
+    defaultValues: { full_name: "", email: "", linkedin_url: "" },
+  });
+
+  useEffect(() => {
+    if (!createAccountOpen || !comm) return;
+    createAccountForm.reset({
+      full_name: (comm.contact_name?.trim() || linkedLead?.name?.trim() || "").trim() || "",
+      email: (comm.contact_email?.trim() || linkedLead?.email?.trim() || "").trim() || "",
+      linkedin_url: "",
+    });
+  }, [createAccountOpen, comm, linkedLead, createAccountForm]);
 
   const {
     data: invoiceLinks,
@@ -962,83 +1007,73 @@ export default function CommunicationMessagesPage() {
     },
   });
 
-  const guestInviteMutation = useMutation({
-    mutationFn: () => {
-      if (!comm) throw new Error("No communication loaded.");
-      return createGuestInvite({
-        email: comm.contact_email,
-        name: comm.contact_name,
-        phone: linkedLead?.phone ?? "",
+  const runCreateAccount = createAccountForm.handleSubmit(async (values) => {
+    if (!communicationId || !leadId) return;
+    setCreateAccountSubmitting(true);
+    try {
+      const data = await addCommunityProfileForLead({
+        full_name: values.full_name.trim(),
+        email: values.email.trim(),
+        linkedin_url: values.linkedin_url.trim(),
+        lead_id: leadId,
       });
-    },
-    onSuccess: (data) => {
-      const magicLink =
-        typeof data.magic_link === "string" && data.magic_link.trim() !== ""
-          ? data.magic_link.trim()
-          : undefined;
 
-      if (magicLink && communicationId) {
-        const trimmedSubject = subject.trim();
-        const subjectLine =
-          trimmedSubject ||
-          (sortedMessages.length > 0
-            ? (() => {
-                const lastSubject = sortedMessages[sortedMessages.length - 1].subject;
-                if (!lastSubject) return "Guest invite";
-                return lastSubject.startsWith("Re:")
-                  ? lastSubject
-                  : `Re: ${lastSubject}`;
-              })()
-            : "Guest invite");
+      await queryClient.invalidateQueries({
+        queryKey: ["communication-lead", communicationId, leadId],
+      });
+      await queryClient.invalidateQueries({ queryKey: LEADS_QUERY_KEY });
 
-        mutation.mutate(
-          {
+      const refetchCommunicationsAndThread = async () => {
+        await queryClient.refetchQueries({ queryKey: ["communications"] });
+        await queryClient.refetchQueries({
+          queryKey: ["communication-messages", communicationId, COMMUNICATION_MESSAGES_PAGE_SIZE],
+        });
+        await queryClient.refetchQueries({ queryKey: ["/api/communications/stats"] });
+      };
+
+      const magicLink = extractMagicLinkFromApiResponse(data);
+      if (magicLink) {
+        try {
+          const subjectLine = buildGuestInviteEmailSubject(subject, sortedMessages);
+          await sendEmailMessage({
             communication_id: communicationId,
             body: magicLink,
             subject: subjectLine,
             is_invoice: bodyContainsInvoiceLink(magicLink, invoiceLinks ?? []),
-          },
-          {
-            onSuccess: () => {
-              toast({
-                title: "Invite sent",
-                description: "The guest link was sent as a message.",
-              });
-            },
-            onError: (err: Error) => {
-              toast({
-                title: "Invite created; message not sent",
-                description: err.message,
-                variant: "destructive",
-              });
-            },
-          },
-        );
-        return;
+          });
+          await refetchCommunicationsAndThread();
+          toast({
+            title: "Account created",
+            description: "The guest link was sent in the thread.",
+          });
+          setCreateAccountOpen(false);
+          createAccountForm.reset();
+        } catch (sendErr) {
+          await refetchCommunicationsAndThread();
+          toast({
+            title: "Account created; message not sent",
+            description: sendErr instanceof Error ? sendErr.message : "Failed to send email.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        await refetchCommunicationsAndThread();
+        toast({
+          title: "Account created",
+          description: "No link in the response. Lead and thread data were refreshed.",
+        });
+        setCreateAccountOpen(false);
+        createAccountForm.reset();
       }
-
-      const urlForToast =
-        magicLink ??
-        (typeof data.invite_url === "string" ? data.invite_url : undefined) ??
-        (typeof data.url === "string" ? data.url : undefined) ??
-        (typeof data.link === "string" ? data.link : undefined);
-
-      const fallback = JSON.stringify(data);
-      const description =
-        urlForToast ??
-        (fallback.length > 200 ? `${fallback.slice(0, 200)}…` : fallback);
+    } catch (err) {
       toast({
-        title: "Invite sent",
-        description: description || "Guest invite created.",
-      });
-    },
-    onError: (err: Error) => {
-      toast({
-        title: "Could not send invite",
-        description: err.message,
+        title: "Could not create account",
+        description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
-    },
+    } finally {
+      setCreateAccountSubmitting(false);
+    }
   });
 
   const qualifyLeadMutation = useMutation({
@@ -1360,43 +1395,61 @@ export default function CommunicationMessagesPage() {
                     </div>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
-                  disabled={guestInviteMutation.isPending}
-                  onSelect={() => {
-                    if (!comm) {
-                      toast({
-                        title: "Could not send invite",
-                        description: "No communication loaded.",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-                    if (!comm.contact_email?.trim()) {
-                      toast({
-                        title: "Could not send invite",
-                        description: "This thread has no contact email.",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-                    guestInviteMutation.mutate();
-                  }}
-                >
-                  <div className="flex items-start gap-2">
-                    {guestInviteMutation.isPending ? (
-                      <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                    ) : (
-                      <MailPlus className="mt-0.5 h-4 w-4 shrink-0" />
-                    )}
-                    <div className="flex min-w-0 flex-col items-start gap-0">
-                      <span>Send invite</span>
-                      <span className="text-xs text-muted-foreground">
-                        Guest portal access
-                      </span>
+                {leadId ? (
+                  <DropdownMenuItem
+                    className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
+                    disabled={!comm || createAccountSubmitting}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      if (!comm) {
+                        toast({
+                          title: "Could not open form",
+                          description: "No communication loaded.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      setCreateAccountOpen(true);
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      {createAccountSubmitting ? (
+                        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                      ) : (
+                        <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
+                      )}
+                      <div className="flex min-w-0 flex-col items-start gap-0">
+                        <span>Create account</span>
+                        <span className="text-xs text-muted-foreground">
+                          Guest portal (community)
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </DropdownMenuItem>
+                  </DropdownMenuItem>
+                ) : (
+                  <Tooltip delayDuration={200}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuItem
+                        className="h-auto flex-col items-stretch gap-0 py-2 cursor-not-allowed opacity-50"
+                        onSelect={(e) => e.preventDefault()}
+                        aria-disabled
+                      >
+                        <div className="flex items-start gap-2">
+                          <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
+                          <div className="flex min-w-0 flex-col items-start gap-0">
+                            <span>Create account</span>
+                            <span className="text-xs text-muted-foreground">
+                              Guest portal (community)
+                            </span>
+                          </div>
+                        </div>
+                      </DropdownMenuItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      Link a lead to this thread first (e.g. &quot;Made to lead&quot;).
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="h-auto cursor-pointer gap-2 py-2 pl-2 pr-1 [&>svg:last-child]:ml-0">
                     <Receipt className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1862,6 +1915,118 @@ export default function CommunicationMessagesPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createAccountOpen}
+        onOpenChange={(open) => {
+          if (createAccountSubmitting) return;
+          setCreateAccountOpen(open);
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          onPointerDownOutside={(e) => {
+            if (createAccountSubmitting) e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (createAccountSubmitting) e.preventDefault();
+          }}
+        >
+          <Form {...createAccountForm}>
+            <form onSubmit={runCreateAccount}>
+              <DialogHeader>
+                <DialogTitle>Create account</DialogTitle>
+                <DialogDescription>
+                  Enter the contact details for the community guest profile. A magic link can be
+                  sent to the thread after the account is created.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <FormField
+                  control={createAccountForm.control}
+                  name="full_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full name</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          autoComplete="name"
+                          disabled={createAccountSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createAccountForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="email"
+                          autoComplete="email"
+                          disabled={createAccountSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createAccountForm.control}
+                  name="linkedin_url"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>LinkedIn URL</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="url"
+                          placeholder="https://linkedin.com/in/…"
+                          autoComplete="off"
+                          disabled={createAccountSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {createAccountSubmitting && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                    Creating account and sending link…
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCreateAccountOpen(false)}
+                  disabled={createAccountSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createAccountSubmitting}>
+                  {createAccountSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Working…
+                    </>
+                  ) : (
+                    "Create account"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
