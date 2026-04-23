@@ -27,7 +27,6 @@ import {
   ExternalLink,
   Plus,
   MessageSquare,
-  Phone,
   Calendar,
   Receipt,
   RefreshCw,
@@ -37,6 +36,10 @@ import {
   DollarSign,
 } from "lucide-react";
 import { fetchLeadsFromSupabase, LEADS_QUERY_KEY } from "@/lib/leads-supabase";
+import {
+  COMMUNICATION_TOTALS_QUERY_KEY,
+  fetchCommunicationTotals,
+} from "@/actions/communications";
 import type { 
   Lead, 
   Communication, 
@@ -67,7 +70,8 @@ export default function Dashboard() {
   });
 
   const { data: commStats } = useQuery<CommunicationStats>({
-    queryKey: ["/api/communications/stats"],
+    queryKey: COMMUNICATION_TOTALS_QUERY_KEY,
+    queryFn: fetchCommunicationTotals,
   });
 
   const { data: screenings, isLoading: screeningsLoading } = useQuery<Screening[]>({
@@ -102,7 +106,9 @@ export default function Dashboard() {
   const occupiedBeds = properties?.reduce((sum, p) => sum + p.occupiedBeds, 0) || 0;
   const totalRooms = properties?.reduce((sum, p) => sum + p.totalRooms, 0) || 0;
   const occupiedRooms = properties?.reduce((sum, p) => sum + p.occupiedRooms, 0) || 0;
-  const communicationTours = (commStats?.videoTours || 0) + (commStats?.inPersonTours || 0);
+  const communicationTours =
+    commStats?.calendarEventsCreated ??
+    (commStats?.videoTours || 0) + (commStats?.inPersonTours || 0);
   const bedOccupancy = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
   const roomOccupancy = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
 
@@ -189,7 +195,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Communication Stats */}
-            <div className="grid grid-cols-5 gap-1 sm:gap-2">
+            <div className="grid grid-cols-4 gap-1 sm:gap-2">
               <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <RefreshCw className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{commStats?.inProgress || 0}</p>
@@ -199,11 +205,6 @@ export default function Dashboard() {
                 <CheckCheck className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{commStats?.processed || 0}</p>
                 <p className="text-xs text-muted-foreground">Processed</p>
-              </div>
-              <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
-                <Phone className="h-4 w-4 mx-auto text-muted-foreground" />
-                <p className="text-lg font-bold mt-1">{commStats?.phoneCalls || 0}</p>
-                <p className="text-xs text-muted-foreground">Phone Calls</p>
               </div>
               <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Calendar className="h-4 w-4 mx-auto text-muted-foreground" />
