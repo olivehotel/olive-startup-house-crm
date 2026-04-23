@@ -455,6 +455,26 @@ export const createCommunityAccountSchema = z.object({
 
 export type CreateCommunityAccountForm = z.infer<typeof createCommunityAccountSchema>;
 
+/** Community Hub modal + same API; optional `lead_id` must be a UUID when non-empty */
+export const addCommunityProfileFormSchema = createCommunityAccountSchema.extend({
+  lead_id: z.string().optional(),
+}).superRefine((data, ctx) => {
+  const v = data.lead_id?.trim();
+  if (!v) return;
+  if (!z.string().uuid().safeParse(v).success) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Invalid UUID",
+      path: ["lead_id"],
+    });
+  }
+});
+
+export type AddCommunityProfileFormValues = z.infer<typeof addCommunityProfileFormSchema>;
+
+/** Response shape from `community_add_profile` (fields vary; magic link extraction uses invite-link helper) */
+export type CommunityAddProfileResponse = Record<string, unknown>;
+
 /** From `get_community_profiles_admin` — may include guest magic links (managers/admins only) */
 export interface CommunityProfileAdmin extends CommunityProfile {
   magic_link?: string | null;

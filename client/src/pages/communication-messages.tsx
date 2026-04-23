@@ -14,7 +14,7 @@ import {
   sendEmailMessage,
 } from "@/actions/communications";
 import {
-  addCommunityProfileForLead,
+  addCommunityProfile,
   getCommunityDocuments,
   getClientDocuments,
 } from "@/actions/community";
@@ -1008,14 +1008,14 @@ export default function CommunicationMessagesPage() {
   });
 
   const runCreateAccount = createAccountForm.handleSubmit(async (values) => {
-    if (!communicationId || !leadId) return;
+    if (!communicationId) return;
     setCreateAccountSubmitting(true);
     try {
-      const data = await addCommunityProfileForLead({
+      const data = await addCommunityProfile({
         full_name: values.full_name.trim(),
         email: values.email.trim(),
         linkedin_url: values.linkedin_url.trim(),
-        lead_id: leadId,
+        ...(leadId ? { lead_id: leadId } : {}),
       });
 
       await queryClient.invalidateQueries({
@@ -1939,8 +1939,8 @@ export default function CommunicationMessagesPage() {
               <DialogHeader>
                 <DialogTitle>Create account</DialogTitle>
                 <DialogDescription>
-                  Enter the contact details for the community guest profile. A magic link can be
-                  sent to the thread after the account is created.
+                  Enter the contact details for the community guest profile. If the API returns a
+                  magic link, it will be sent as a message in this email thread.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">

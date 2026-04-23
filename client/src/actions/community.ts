@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import type {
+  CommunityAddProfileResponse,
   CommunityDocument,
   CommunityDocumentAudience,
   CommunityDocumentsPagination,
@@ -32,28 +33,26 @@ export const getCommunityProfilesAdmin = (page = 1) =>
     { params: { page } },
   );
 
-export type AddCommunityProfileForLeadPayload = {
+export type AddCommunityProfilePayload = {
   full_name: string;
   email: string;
   linkedin_url: string;
   lead_id?: string;
 };
 
-export const addCommunityProfileForLead = ({
-  full_name,
-  email,
-  linkedin_url,
-  lead_id,
-}: AddCommunityProfileForLeadPayload) =>
-  apiFetch<Record<string, unknown>>("community_add_profile", {
+export function addCommunityProfile(body: AddCommunityProfilePayload) {
+  const payload: Record<string, string> = {
+    full_name: body.full_name.trim(),
+    email: body.email.trim(),
+    linkedin_url: body.linkedin_url.trim(),
+  };
+  const leadId = body.lead_id?.trim();
+  if (leadId) payload.lead_id = leadId;
+  return apiFetch<CommunityAddProfileResponse>("community_add_profile", {
     method: "POST",
-    body: {
-      full_name,
-      email,
-      linkedin_url,
-      ...(lead_id?.trim() ? { lead_id: lead_id.trim() } : {}),
-    },
+    body: payload,
   });
+}
 
 export const deleteCommunityProfile = (profileId: string) =>
   apiFetch<unknown>("community-delete-profile", {

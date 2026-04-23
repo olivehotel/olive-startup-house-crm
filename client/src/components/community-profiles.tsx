@@ -22,23 +22,21 @@ import {
   Copy,
 } from "lucide-react";
 import {
+  addCommunityProfile,
   getCommunityProfiles,
   getCommunityProfilesAdmin,
   editCommunityProfile,
   deleteCommunityProfile,
-  addCommunityProfileForLead,
 } from "@/actions/community";
-import { extractMagicLinkFromApiResponse } from "@/lib/invite-link";
-import { bodyContainsInvoiceLink } from "@/lib/invoice-links-supabase";
-import { findCommunicationIdByEmail, sendEmailMessage } from "@/actions/communications";
 import { useUserRole } from "@/hooks/use-user-role";
+import { extractMagicLinkFromApiResponse } from "@/lib/invite-link";
 import type {
+  AddCommunityProfileFormValues,
   CommunityProfile,
   CommunityProfileAdmin,
   CommunityProfilesPagination,
-  CreateCommunityAccountForm,
 } from "@shared/schema";
-import { createCommunityAccountSchema } from "@shared/schema";
+import { addCommunityProfileFormSchema } from "@shared/schema";
 import { FileDropZone } from "@/components/file-drop-zone";
 import {
   Dialog,
@@ -81,9 +79,9 @@ export function CommunityProfiles() {
   const [deletingProfile, setDeletingProfile] = useState<CommunityProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const addProfileForm = useForm<CreateCommunityAccountForm>({
-    resolver: zodResolver(createCommunityAccountSchema),
-    defaultValues: { full_name: "", email: "", linkedin_url: "" },
+  const addProfileForm = useForm<AddCommunityProfileFormValues>({
+    resolver: zodResolver(addCommunityProfileFormSchema),
+    defaultValues: { full_name: "", email: "", linkedin_url: "", lead_id: "" },
   });
 
   const loadPage = useCallback(async (p: number) => {
@@ -107,66 +105,41 @@ export function CommunityProfiles() {
   }, [page, loadPage, userRoleLoading]);
 
   const closeAddProfileDialog = () => {
-    addProfileForm.reset();
+    addProfileForm.reset({ full_name: "", email: "", linkedin_url: "", lead_id: "" });
     setAddProfileOpen(false);
   };
 
-  const onSubmitAddProfile = async (data: CreateCommunityAccountForm) => {
-    const email = data.email.trim();
+  const onSubmitAddProfile = async (data: AddCommunityProfileFormValues) => {
     setAddProfileSubmitting(true);
     try {
-      const res = await addCommunityProfileForLead({
+      const leadId = data.lead_id?.trim();
+      const res = await addCommunityProfile({
         full_name: data.full_name.trim(),
-        email,
+        email: data.email.trim(),
         linkedin_url: data.linkedin_url.trim(),
+        ...(leadId ? { lead_id: leadId } : {}),
       });
 
       const magicLink = extractMagicLinkFromApiResponse(res);
-      if (!magicLink) {
-        closeAddProfileDialog();
-        toast({
-          title: "Profile created",
-          description: "No link in the response. The list was refreshed.",
-        });
-        if (page === 1) await loadPage(1);
-        else setPage(1);
-        return;
-      }
+      closeAddProfileDialog();
 
-      const threadId = await findCommunicationIdByEmail(email);
-      if (threadId) {
+      if (magicLink) {
         try {
-          await sendEmailMessage({
-            communication_id: threadId,
-            body: magicLink,
-            subject: "Guest invite",
-            is_invoice: bodyContainsInvoiceLink(magicLink, []),
-          });
-          closeAddProfileDialog();
+          await navigator.clipboard.writeText(magicLink);
           toast({
             title: "Profile created",
-            description: "The guest link was sent in the thread.",
+            description: `Magic link copied. Send it to ${data.email.trim()} (paste in an email or your mail app).`,
           });
-        } catch (sendErr) {
+        } catch {
           toast({
-            title: "Profile created; message not sent",
-            description: sendErr instanceof Error ? sendErr.message : "Failed to send email.",
-            variant: "destructive",
+            title: "Profile created",
+            description: "Copy the magic link from your records if the clipboard step failed.",
           });
         }
       } else {
-        let copyHint = "";
-        try {
-          await navigator.clipboard.writeText(magicLink);
-          copyHint = " The link was copied to your clipboard.";
-        } catch {
-          copyHint = "";
-        }
-        closeAddProfileDialog();
         toast({
-          title: "Profile created; no matching thread",
-          description: `No Communication Center thread found for ${email}.${copyHint} Add or match this email to a thread to send via email.`,
-          variant: "destructive",
+          title: "Profile created",
+          description: `"${data.full_name.trim()}" has been added.`,
         });
       }
 
@@ -436,8 +409,11 @@ export function CommunityProfiles() {
     <Dialog
       open={addProfileOpen}
       onOpenChange={(open) => {
-        if (addProfileSubmitting) return;
-        if (!open) closeAddProfileDialog();
+        if (addProfileSubmitting && !open) return;
+        setAddProfileOpen(open);
+        if (!open) {
+          addProfileForm.reset({ full_name: "", email: "", linkedin_url: "", lead_id: "" });
+        }
       }}
     >
       <DialogContent
@@ -452,9 +428,9 @@ export function CommunityProfiles() {
         <Form {...addProfileForm}>
           <form onSubmit={addProfileForm.handleSubmit(onSubmitAddProfile)}>
             <DialogHeader>
-              <DialogTitle>Add profile</DialogTitle>
+              <DialogTitle>Community Profiles</DialogTitle>
               <DialogDescription>
-                Invite a guest by email. They will receive a magic link to complete onboarding.
+                Member profiles for the co-living community
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -466,10 +442,10 @@ export function CommunityProfiles() {
                     <FormLabel>Full name</FormLabel>
                     <FormControl>
                       <Input
-                        {...field}
-                        autoComplete="name"
                         placeholder="Jane Smith"
+                        autoComplete="name"
                         disabled={addProfileSubmitting}
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -484,11 +460,10 @@ export function CommunityProfiles() {
                     <FormLabel>Email</FormLabel>
                     <FormControl>
                       <Input
-                        {...field}
                         type="email"
                         autoComplete="email"
-                        placeholder="jane@example.com"
                         disabled={addProfileSubmitting}
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -503,23 +478,54 @@ export function CommunityProfiles() {
                     <FormLabel>LinkedIn URL</FormLabel>
                     <FormControl>
                       <Input
-                        {...field}
                         type="url"
                         placeholder="https://linkedin.com/in/…"
                         autoComplete="off"
                         disabled={addProfileSubmitting}
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              <FormField
+                control={addProfileForm.control}
+                name="lead_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Lead ID <span className="text-muted-foreground font-normal">(optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="UUID"
+                        autoComplete="off"
+                        disabled={addProfileSubmitting}
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {addProfileSubmitting && (
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                  Creating profile…
+                </p>
+              )}
             </div>
             <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => closeAddProfileDialog()}
+                onClick={() => {
+                  if (addProfileSubmitting) return;
+                  setAddProfileOpen(false);
+                  addProfileForm.reset({ full_name: "", email: "", linkedin_url: "", lead_id: "" });
+                }}
                 disabled={addProfileSubmitting}
               >
                 Cancel
@@ -528,10 +534,10 @@ export function CommunityProfiles() {
                 {addProfileSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending…
+                    Working…
                   </>
                 ) : (
-                  "Add profile"
+                  "Add Profile"
                 )}
               </Button>
             </DialogFooter>
