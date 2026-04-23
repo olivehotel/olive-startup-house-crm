@@ -81,7 +81,7 @@ export function CommunityProfiles() {
 
   const addProfileForm = useForm<AddCommunityProfileFormValues>({
     resolver: zodResolver(addCommunityProfileFormSchema),
-    defaultValues: { full_name: "", email: "", linkedin_url: "", lead_id: "" },
+    defaultValues: { full_name: "", email: "", linkedin_url: "" },
   });
 
   const loadPage = useCallback(async (p: number) => {
@@ -105,19 +105,17 @@ export function CommunityProfiles() {
   }, [page, loadPage, userRoleLoading]);
 
   const closeAddProfileDialog = () => {
-    addProfileForm.reset({ full_name: "", email: "", linkedin_url: "", lead_id: "" });
+    addProfileForm.reset({ full_name: "", email: "", linkedin_url: "" });
     setAddProfileOpen(false);
   };
 
   const onSubmitAddProfile = async (data: AddCommunityProfileFormValues) => {
     setAddProfileSubmitting(true);
     try {
-      const leadId = data.lead_id?.trim();
       const res = await addCommunityProfile({
         full_name: data.full_name.trim(),
         email: data.email.trim(),
         linkedin_url: data.linkedin_url.trim(),
-        ...(leadId ? { lead_id: leadId } : {}),
       });
 
       const magicLink = extractMagicLinkFromApiResponse(res);
@@ -412,7 +410,7 @@ export function CommunityProfiles() {
         if (addProfileSubmitting && !open) return;
         setAddProfileOpen(open);
         if (!open) {
-          addProfileForm.reset({ full_name: "", email: "", linkedin_url: "", lead_id: "" });
+          addProfileForm.reset({ full_name: "", email: "", linkedin_url: "" });
         }
       }}
     >
@@ -489,27 +487,6 @@ export function CommunityProfiles() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={addProfileForm.control}
-                name="lead_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Lead ID <span className="text-muted-foreground font-normal">(optional)</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="UUID"
-                        autoComplete="off"
-                        disabled={addProfileSubmitting}
-                        {...field}
-                        value={field.value ?? ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               {addProfileSubmitting && (
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
@@ -524,7 +501,7 @@ export function CommunityProfiles() {
                 onClick={() => {
                   if (addProfileSubmitting) return;
                   setAddProfileOpen(false);
-                  addProfileForm.reset({ full_name: "", email: "", linkedin_url: "", lead_id: "" });
+                  addProfileForm.reset({ full_name: "", email: "", linkedin_url: "" });
                 }}
                 disabled={addProfileSubmitting}
               >
