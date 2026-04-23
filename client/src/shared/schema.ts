@@ -472,7 +472,7 @@ export const addCommunityProfileFormSchema = createCommunityAccountSchema.extend
 
 export type AddCommunityProfileFormValues = z.infer<typeof addCommunityProfileFormSchema>;
 
-/** Response shape from `community_add_profile` (fields vary; magic link extraction uses invite-link helper) */
+/** Response shape from `community_add_profile` (fields vary; link may be on root e.g. `login_link` or nested under `profile` — use invite-link helper) */
 export type CommunityAddProfileResponse = Record<string, unknown>;
 
 /** From `get_community_profiles_admin` — may include guest magic links (managers/admins only) */
