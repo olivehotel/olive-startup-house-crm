@@ -342,10 +342,17 @@ export interface ExpenseBreakdown {
   change: number;
 }
 
+// communication-totals edge function (GET)
+export interface CommunicationTotalsResponse {
+  in_progress: number;
+  processed: number;
+  calendar_events_created: number;
+  invoices_sent: number;
+}
+
 // Communication Stats
 export interface CommunicationStats {
   textMessages: number;
-  phoneCalls: number;
   videoTours: number;
   inPersonTours: number;
   emails: number;
@@ -353,6 +360,8 @@ export interface CommunicationStats {
   inProgress: number;
   processed: number;
   invoicesSend?: number;
+  /** From communication-totals; falls back to video + in-person tour counts if absent */
+  calendarEventsCreated?: number;
 }
 
 // Community Material Types (UUID → value)

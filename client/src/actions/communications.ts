@@ -1,5 +1,34 @@
 import { apiFetch } from "@/lib/api";
-import type { Communication, CommunicationMessagesResponse, Pagination } from "@shared/schema";
+import type {
+  Communication,
+  CommunicationMessagesResponse,
+  CommunicationStats,
+  CommunicationTotalsResponse,
+  Pagination,
+} from "@shared/schema";
+
+export const COMMUNICATION_TOTALS_QUERY_KEY = ["communication-totals"] as const;
+
+export async function fetchCommunicationTotals(): Promise<CommunicationStats> {
+  const raw = await apiFetch<CommunicationTotalsResponse>("communication-totals");
+  const inProgress = raw.in_progress;
+  const processed = raw.processed;
+  const calendarEventsCreated = raw.calendar_events_created;
+  const invoicesSend = raw.invoices_sent;
+  const totalActivity =
+    inProgress + processed + calendarEventsCreated + invoicesSend;
+  return {
+    textMessages: 0,
+    videoTours: 0,
+    inPersonTours: 0,
+    emails: 0,
+    totalActivity,
+    inProgress,
+    processed,
+    invoicesSend,
+    calendarEventsCreated,
+  };
+}
 
 export const COMMUNICATION_MESSAGES_PAGE_SIZE = 20;
 

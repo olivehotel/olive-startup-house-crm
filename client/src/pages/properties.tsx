@@ -17,7 +17,10 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
-import { deleteAllCommunicationsByEmail } from "@/actions/communications";
+import {
+  COMMUNICATION_TOTALS_QUERY_KEY,
+  deleteAllCommunicationsByEmail,
+} from "@/actions/communications";
 import { Plus, Building2, BedDouble, DoorOpen, DollarSign, Loader2, Trash2 } from "lucide-react";
 import type { Property } from "@shared/schema";
 
@@ -65,7 +68,7 @@ export default function PropertiesPage() {
       setDeleteCommsEmail("");
       setDeleteCommsOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["communications"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/communications/stats"] });
+      await queryClient.invalidateQueries({ queryKey: COMMUNICATION_TOTALS_QUERY_KEY });
     } catch (err) {
       toast({
         title: "Delete failed",

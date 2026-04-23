@@ -14,7 +14,6 @@ import {
 import {
   Search,
   MessageSquare,
-  Phone,
   Calendar,
   Receipt,
   RefreshCw,
@@ -26,7 +25,11 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { communicationChannels, communicationStatuses } from "@shared/schema";
 import type { Communication, CommunicationStats } from "@shared/schema";
-import { getCommunications } from "@/actions/communications";
+import {
+  COMMUNICATION_TOTALS_QUERY_KEY,
+  fetchCommunicationTotals,
+  getCommunications,
+} from "@/actions/communications";
 import {
   getCommunicationChannelId,
   getCommunicationStatusId,
@@ -48,7 +51,8 @@ export default function CommunicationPage() {
   const pagination = communicationsData?.pagination;
 
   const { data: stats } = useQuery<CommunicationStats>({
-    queryKey: ["/api/communications/stats"],
+    queryKey: COMMUNICATION_TOTALS_QUERY_KEY,
+    queryFn: fetchCommunicationTotals,
   });
 
   const filteredComms = communications?.filter((comm) => {
@@ -59,7 +63,9 @@ export default function CommunicationPage() {
     const matchesStatus = statusFilter === "all" || stId === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
   });
-  const toursCount = (stats?.videoTours || 0) + (stats?.inPersonTours || 0);
+  const toursCount =
+    stats?.calendarEventsCreated ??
+    (stats?.videoTours || 0) + (stats?.inPersonTours || 0);
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
@@ -72,7 +78,7 @@ export default function CommunicationPage() {
       </div>
 
       {/* Communication Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="hover-elevate cursor-pointer">
           <CardContent className="p-4 text-center">
             <RefreshCw className="h-6 w-6 mx-auto text-blue-600 dark:text-blue-400" />
@@ -85,13 +91,6 @@ export default function CommunicationPage() {
             <CheckCheck className="h-6 w-6 mx-auto text-emerald-600 dark:text-emerald-400" />
             <p className="text-2xl font-bold mt-2">{stats?.processed || 0}</p>
             <p className="text-sm text-muted-foreground">Processed</p>
-          </CardContent>
-        </Card>
-        <Card className="hover-elevate cursor-pointer">
-          <CardContent className="p-4 text-center">
-            <Phone className="h-6 w-6 mx-auto text-purple-600 dark:text-purple-400" />
-            <p className="text-2xl font-bold mt-2">{stats?.phoneCalls || 0}</p>
-            <p className="text-sm text-muted-foreground">Phone Calls</p>
           </CardContent>
         </Card>
         <Card className="hover-elevate cursor-pointer">

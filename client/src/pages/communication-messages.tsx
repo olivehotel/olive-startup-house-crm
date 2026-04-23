@@ -10,6 +10,7 @@ import {
   createCalendarEvent,
   createLeadFromCommunication,
   COMMUNICATION_MESSAGES_PAGE_SIZE,
+  COMMUNICATION_TOTALS_QUERY_KEY,
   getCommunicationMessages,
   sendEmailMessage,
 } from "@/actions/communications";
@@ -1028,7 +1029,7 @@ export default function CommunicationMessagesPage() {
         await queryClient.refetchQueries({
           queryKey: ["communication-messages", communicationId, COMMUNICATION_MESSAGES_PAGE_SIZE],
         });
-        await queryClient.refetchQueries({ queryKey: ["/api/communications/stats"] });
+        await queryClient.refetchQueries({ queryKey: COMMUNICATION_TOTALS_QUERY_KEY });
       };
 
       const magicLink = extractMagicLinkFromApiResponse(data);
