@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Plus,
   UserCircle,
+  X,
   Loader2,
   Linkedin,
   DoorOpen,
@@ -26,24 +27,20 @@ import {
   getCommunityProfilesAdmin,
   editCommunityProfile,
   deleteCommunityProfile,
-  addCommunityProfileForLead,
 } from "@/actions/community";
-import { extractMagicLinkFromApiResponse } from "@/lib/invite-link";
-import { bodyContainsInvoiceLink } from "@/lib/invoice-links-supabase";
-import { findCommunicationIdByEmail, sendEmailMessage } from "@/actions/communications";
 import { useUserRole } from "@/hooks/use-user-role";
+import { supabase } from "@/lib/supabase";
 import type {
+  InsertProfile,
   CommunityProfile,
   CommunityProfileAdmin,
   CommunityProfilesPagination,
-  CreateCommunityAccountForm,
 } from "@shared/schema";
-import { createCommunityAccountSchema } from "@shared/schema";
+import { insertProfileSchema } from "@shared/schema";
 import { FileDropZone } from "@/components/file-drop-zone";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -61,8 +58,9 @@ import {
 export function CommunityProfiles() {
   const { toast } = useToast();
   const { canViewCommunityAdminProfiles, isLoading: userRoleLoading } = useUserRole();
-  const [addProfileOpen, setAddProfileOpen] = useState(false);
-  const [addProfileSubmitting, setAddProfileSubmitting] = useState(false);
+  const [showAddProfileForm, setShowAddProfileForm] = useState(false);
+  const [profileUploading, setProfileUploading] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [profiles, setProfiles] = useState<CommunityProfileAdmin[]>([]);
   const [pagination, setPagination] = useState<CommunityProfilesPagination | null>(null);
   const [page, setPage] = useState(1);
@@ -81,9 +79,9 @@ export function CommunityProfiles() {
   const [deletingProfile, setDeletingProfile] = useState<CommunityProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const addProfileForm = useForm<CreateCommunityAccountForm>({
-    resolver: zodResolver(createCommunityAccountSchema),
-    defaultValues: { full_name: "", email: "", linkedin_url: "" },
+  const profileForm = useForm<InsertProfile>({
+    resolver: zodResolver(insertProfileSchema),
+    defaultValues: { name: "", position: "", description: "", room: "", linkedin_url: "" },
   });
 
   const loadPage = useCallback(async (p: number) => {
@@ -106,70 +104,36 @@ export function CommunityProfiles() {
     void loadPage(page);
   }, [page, loadPage, userRoleLoading]);
 
-  const closeAddProfileDialog = () => {
-    addProfileForm.reset();
-    setAddProfileOpen(false);
+  const resetProfileForm = () => {
+    profileForm.reset();
+    setAvatarFile(null);
+    setShowAddProfileForm(false);
   };
 
-  const onSubmitAddProfile = async (data: CreateCommunityAccountForm) => {
-    const email = data.email.trim();
-    setAddProfileSubmitting(true);
+  const onSubmitProfile = async (data: InsertProfile) => {
+    setProfileUploading(true);
     try {
-      const res = await addCommunityProfileForLead({
-        full_name: data.full_name.trim(),
-        email,
-        linkedin_url: data.linkedin_url.trim(),
+      const body = new FormData();
+      body.append("name", data.name);
+      body.append("position", data.position);
+      if (data.description) body.append("description", data.description);
+      if (data.room) body.append("room", data.room);
+      if (data.linkedin_url) body.append("linkedin_url", data.linkedin_url);
+      if (avatarFile) body.append("avatar", avatarFile);
+
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session?.access_token) {
+        throw new Error("Session expired — please log out and log in again.");
+      }
+
+      const { error: fnError } = await supabase.functions.invoke("community_add_profile", {
+        body,
+        headers: { Authorization: `Bearer ${refreshData.session.access_token}` },
       });
+      if (fnError) throw fnError;
 
-      const magicLink = extractMagicLinkFromApiResponse(res);
-      if (!magicLink) {
-        closeAddProfileDialog();
-        toast({
-          title: "Profile created",
-          description: "No link in the response. The list was refreshed.",
-        });
-        if (page === 1) await loadPage(1);
-        else setPage(1);
-        return;
-      }
-
-      const threadId = await findCommunicationIdByEmail(email);
-      if (threadId) {
-        try {
-          await sendEmailMessage({
-            communication_id: threadId,
-            body: magicLink,
-            subject: "Guest invite",
-            is_invoice: bodyContainsInvoiceLink(magicLink, []),
-          });
-          closeAddProfileDialog();
-          toast({
-            title: "Profile created",
-            description: "The guest link was sent in the thread.",
-          });
-        } catch (sendErr) {
-          toast({
-            title: "Profile created; message not sent",
-            description: sendErr instanceof Error ? sendErr.message : "Failed to send email.",
-            variant: "destructive",
-          });
-        }
-      } else {
-        let copyHint = "";
-        try {
-          await navigator.clipboard.writeText(magicLink);
-          copyHint = " The link was copied to your clipboard.";
-        } catch {
-          copyHint = "";
-        }
-        closeAddProfileDialog();
-        toast({
-          title: "Profile created; no matching thread",
-          description: `No Communication Center thread found for ${email}.${copyHint} Add or match this email to a thread to send via email.`,
-          variant: "destructive",
-        });
-      }
-
+      resetProfileForm();
+      toast({ title: "Profile created", description: `"${data.name}" has been added.` });
       if (page === 1) {
         await loadPage(1);
       } else {
@@ -182,7 +146,7 @@ export function CommunityProfiles() {
         variant: "destructive",
       });
     } finally {
-      setAddProfileSubmitting(false);
+      setProfileUploading(false);
     }
   };
 
@@ -280,13 +244,116 @@ export function CommunityProfiles() {
             <CardTitle className="text-lg">Community Profiles</CardTitle>
             <p className="text-sm text-muted-foreground mt-0.5">Member profiles for the co-living community</p>
           </div>
-          <Button size="sm" onClick={() => setAddProfileOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Profile
+          <Button size="sm" onClick={() => setShowAddProfileForm((v) => !v)}>
+            {showAddProfileForm ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+            {showAddProfileForm ? "Cancel" : "Add Profile"}
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {showAddProfileForm && (
+          <div className="rounded-lg border border-border p-4 bg-muted/30">
+            <Form {...profileForm}>
+              <form onSubmit={profileForm.handleSubmit(onSubmitProfile)} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={profileForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Jane Smith" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="position"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Position</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Founder & CEO" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="room"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Room <span className="text-muted-foreground">(optional)</span></FormLabel>
+                        <FormControl>
+                          <Input placeholder="Room 204" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="linkedin_url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>LinkedIn URL <span className="text-muted-foreground">(optional)</span></FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://linkedin.com/in/username" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={profileForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description <span className="text-muted-foreground">(optional)</span></FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Brief bio or description..." rows={2} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div>
+                  <p className="text-sm font-medium mb-2">Avatar <span className="text-muted-foreground">(optional)</span></p>
+                  <FileDropZone
+                    accept=".jpg,.jpeg,.png,.webp,.gif"
+                    label="Upload profile photo"
+                    file={avatarFile}
+                    onChange={setAvatarFile}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={resetProfileForm} disabled={profileUploading}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={profileUploading}>
+                    {profileUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving…
+                      </>
+                    ) : (
+                      "Add Profile"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </div>
+        )}
+
         {userRoleLoading || loadingProfiles ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -419,126 +486,19 @@ export function CommunityProfiles() {
               </div>
             )}
           </>
-        ) : (
+        ) : !showAddProfileForm ? (
           <div className="text-center py-12">
             <UserCircle className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
             <p className="text-muted-foreground mt-4">No profiles added yet</p>
             <p className="text-sm text-muted-foreground">Add member profiles to showcase your community.</p>
-            <Button className="mt-4" onClick={() => setAddProfileOpen(true)}>
+            <Button className="mt-4" onClick={() => setShowAddProfileForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Your First Profile
             </Button>
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
-
-    <Dialog
-      open={addProfileOpen}
-      onOpenChange={(open) => {
-        if (addProfileSubmitting) return;
-        if (!open) closeAddProfileDialog();
-      }}
-    >
-      <DialogContent
-        className="sm:max-w-md"
-        onPointerDownOutside={(e) => {
-          if (addProfileSubmitting) e.preventDefault();
-        }}
-        onEscapeKeyDown={(e) => {
-          if (addProfileSubmitting) e.preventDefault();
-        }}
-      >
-        <Form {...addProfileForm}>
-          <form onSubmit={addProfileForm.handleSubmit(onSubmitAddProfile)}>
-            <DialogHeader>
-              <DialogTitle>Add profile</DialogTitle>
-              <DialogDescription>
-                Invite a guest by email. They will receive a magic link to complete onboarding.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <FormField
-                control={addProfileForm.control}
-                name="full_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full name</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        autoComplete="name"
-                        placeholder="Jane Smith"
-                        disabled={addProfileSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={addProfileForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="email"
-                        autoComplete="email"
-                        placeholder="jane@example.com"
-                        disabled={addProfileSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={addProfileForm.control}
-                name="linkedin_url"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>LinkedIn URL</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="url"
-                        placeholder="https://linkedin.com/in/…"
-                        autoComplete="off"
-                        disabled={addProfileSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => closeAddProfileDialog()}
-                disabled={addProfileSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={addProfileSubmitting}>
-                {addProfileSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending…
-                  </>
-                ) : (
-                  "Add profile"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
 
     <Dialog
       open={editingProfile !== null}
