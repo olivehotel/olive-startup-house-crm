@@ -9,6 +9,27 @@ export const getCommunications = (page = 1) =>
     { params: { page } },
   );
 
+/** Resolves a communication list row by `main_mail` (paginates until match or end). */
+export async function findCommunicationIdByEmail(email: string): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+
+  const match = (comms: Communication[]) =>
+    comms.find((c) => (c.main_mail ?? "").trim().toLowerCase() === normalized)?.id ?? null;
+
+  const first = await getCommunications(1);
+  const hitFirst = match(first.communications ?? []);
+  if (hitFirst) return hitFirst;
+
+  const totalPages = Math.max(1, first.pagination?.total_pages ?? 1);
+  for (let p = 2; p <= totalPages; p++) {
+    const { communications } = await getCommunications(p);
+    const id = match(communications ?? []);
+    if (id) return id;
+  }
+  return null;
+}
+
 export const getCommunicationMessages = (
   communicationId: string,
   params?: { page?: number; limit?: number },
@@ -22,24 +43,13 @@ export const getCommunicationMessages = (
     },
   });
 
-/** Thread reply uses `communication_id`; guest invite from Community may use `to_email` if the edge function supports it. */
-export type SendEmailMessagePayload =
-  | {
-      communication_id: string;
-      body: string;
-      subject: string;
-      document_ids?: string[];
-      is_invoice?: boolean;
-    }
-  | {
-      to_email: string;
-      body: string;
-      subject: string;
-      document_ids?: string[];
-      is_invoice?: boolean;
-    };
-
-export const sendEmailMessage = (payload: SendEmailMessagePayload) =>
+export const sendEmailMessage = (payload: {
+  communication_id: string;
+  body: string;
+  subject: string;
+  document_ids?: string[];
+  is_invoice?: boolean;
+}) =>
   apiFetch<{ success: boolean }>("send-email-message", {
     method: "POST",
     body: payload,
@@ -77,15 +87,3 @@ export const createGuestInvite = (payload: CreateGuestInvitePayload) =>
     method: "POST",
     body: payload,
   });
-
-/** Dev cleanup: remove all communication records for a mailbox in Communication Center. */
-export function deleteAllCommunicationsByEmail(email: string) {
-  const normalized = email.trim();
-  if (!normalized) {
-    return Promise.reject(new Error("Email is required"));
-  }
-  return apiFetch<Record<string, unknown>>("dev-delete-all-communications-by-email", {
-    method: "POST",
-    body: { email: normalized },
-  });
-}

@@ -30,7 +30,7 @@ import {
 } from "@/actions/community";
 import { extractMagicLinkFromApiResponse } from "@/lib/invite-link";
 import { bodyContainsInvoiceLink } from "@/lib/invoice-links-supabase";
-import { sendEmailMessage } from "@/actions/communications";
+import { findCommunicationIdByEmail, sendEmailMessage } from "@/actions/communications";
 import { useUserRole } from "@/hooks/use-user-role";
 import type {
   CommunityProfile,
@@ -62,11 +62,7 @@ export function CommunityProfiles() {
   const { toast } = useToast();
   const { canViewCommunityAdminProfiles, isLoading: userRoleLoading } = useUserRole();
   const [addProfileOpen, setAddProfileOpen] = useState(false);
-  const [addProfileStep, setAddProfileStep] = useState<"form" | "invite">("form");
-  const [inviteLinkDraft, setInviteLinkDraft] = useState("");
-  const [inviteGuestEmail, setInviteGuestEmail] = useState("");
   const [addProfileSubmitting, setAddProfileSubmitting] = useState(false);
-  const [sendInviteSubmitting, setSendInviteSubmitting] = useState(false);
   const [profiles, setProfiles] = useState<CommunityProfileAdmin[]>([]);
   const [pagination, setPagination] = useState<CommunityProfilesPagination | null>(null);
   const [page, setPage] = useState(1);
@@ -112,9 +108,6 @@ export function CommunityProfiles() {
 
   const closeAddProfileDialog = () => {
     addProfileForm.reset();
-    setAddProfileStep("form");
-    setInviteLinkDraft("");
-    setInviteGuestEmail("");
     setAddProfileOpen(false);
   };
 
@@ -140,13 +133,43 @@ export function CommunityProfiles() {
         return;
       }
 
-      setInviteGuestEmail(email);
-      setInviteLinkDraft(magicLink);
-      setAddProfileStep("invite");
-      toast({
-        title: "Profile created",
-        description: "Review the magic link below, then send the invite to the email address.",
-      });
+      const threadId = await findCommunicationIdByEmail(email);
+      if (threadId) {
+        try {
+          await sendEmailMessage({
+            communication_id: threadId,
+            body: magicLink,
+            subject: "Guest invite",
+            is_invoice: bodyContainsInvoiceLink(magicLink, []),
+          });
+          closeAddProfileDialog();
+          toast({
+            title: "Profile created",
+            description: "The guest link was sent in the thread.",
+          });
+        } catch (sendErr) {
+          toast({
+            title: "Profile created; message not sent",
+            description: sendErr instanceof Error ? sendErr.message : "Failed to send email.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        let copyHint = "";
+        try {
+          await navigator.clipboard.writeText(magicLink);
+          copyHint = " The link was copied to your clipboard.";
+        } catch {
+          copyHint = "";
+        }
+        closeAddProfileDialog();
+        toast({
+          title: "Profile created; no matching thread",
+          description: `No Communication Center thread found for ${email}.${copyHint} Add or match this email to a thread to send via email.`,
+          variant: "destructive",
+        });
+      }
+
       if (page === 1) {
         await loadPage(1);
       } else {
@@ -160,40 +183,6 @@ export function CommunityProfiles() {
       });
     } finally {
       setAddProfileSubmitting(false);
-    }
-  };
-
-  const handleSendInviteEmail = async () => {
-    const body = inviteLinkDraft.trim();
-    if (!body) {
-      toast({ title: "Magic link is empty", variant: "destructive" });
-      return;
-    }
-    const toEmail = inviteGuestEmail.trim();
-    if (!toEmail) {
-      toast({ title: "Email is missing", variant: "destructive" });
-      return;
-    }
-    setSendInviteSubmitting(true);
-    try {
-      await sendEmailMessage({
-        to_email: toEmail,
-        body,
-        subject: "Guest invite",
-        is_invoice: bodyContainsInvoiceLink(body, []),
-      });
-      toast({
-        title: "Email sent",
-        description: `The guest link was sent to ${toEmail}.`,
-      });
-    } catch (sendErr) {
-      toast({
-        title: "Message not sent",
-        description: sendErr instanceof Error ? sendErr.message : "Failed to send email.",
-        variant: "destructive",
-      });
-    } finally {
-      setSendInviteSubmitting(false);
     }
   };
 
@@ -447,169 +436,107 @@ export function CommunityProfiles() {
     <Dialog
       open={addProfileOpen}
       onOpenChange={(open) => {
-        if (addProfileSubmitting || sendInviteSubmitting) return;
+        if (addProfileSubmitting) return;
         if (!open) closeAddProfileDialog();
       }}
     >
       <DialogContent
         className="sm:max-w-md"
         onPointerDownOutside={(e) => {
-          if (addProfileSubmitting || sendInviteSubmitting) e.preventDefault();
+          if (addProfileSubmitting) e.preventDefault();
         }}
         onEscapeKeyDown={(e) => {
-          if (addProfileSubmitting || sendInviteSubmitting) e.preventDefault();
+          if (addProfileSubmitting) e.preventDefault();
         }}
       >
-        {addProfileStep === "form" ? (
-          <Form {...addProfileForm}>
-            <form onSubmit={addProfileForm.handleSubmit(onSubmitAddProfile)}>
-              <DialogHeader>
-                <DialogTitle>Add profile</DialogTitle>
-                <DialogDescription>
-                  Invite a guest by email. They will receive a magic link to complete onboarding.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <FormField
-                  control={addProfileForm.control}
-                  name="full_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Full name</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          autoComplete="name"
-                          placeholder="Jane Smith"
-                          disabled={addProfileSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={addProfileForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="email"
-                          autoComplete="email"
-                          placeholder="jane@example.com"
-                          disabled={addProfileSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={addProfileForm.control}
-                  name="linkedin_url"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>LinkedIn URL</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="url"
-                          placeholder="https://linkedin.com/in/…"
-                          autoComplete="off"
-                          disabled={addProfileSubmitting}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => closeAddProfileDialog()}
-                  disabled={addProfileSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={addProfileSubmitting}>
-                  {addProfileSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating…
-                    </>
-                  ) : (
-                    "Add profile"
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        ) : (
-          <>
+        <Form {...addProfileForm}>
+          <form onSubmit={addProfileForm.handleSubmit(onSubmitAddProfile)}>
             <DialogHeader>
-              <DialogTitle>Send guest invite</DialogTitle>
+              <DialogTitle>Add profile</DialogTitle>
               <DialogDescription>
-                Magic link for {inviteGuestEmail}. Edit if needed, then send the invite to this address.
+                Invite a guest by email. They will receive a magic link to complete onboarding.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="invite-magic-link">Magic link</Label>
-                <Input
-                  id="invite-magic-link"
-                  value={inviteLinkDraft}
-                  onChange={(e) => setInviteLinkDraft(e.target.value)}
-                  placeholder="https://…"
-                  disabled={sendInviteSubmitting}
-                  className="font-mono text-xs"
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="w-fit"
-                disabled={sendInviteSubmitting || !inviteLinkDraft.trim()}
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(inviteLinkDraft.trim());
-                    toast({ title: "Copied", description: "Magic link copied to clipboard." });
-                  } catch {
-                    toast({ title: "Copy failed", variant: "destructive" });
-                  }
-                }}
-              >
-                <Copy className="mr-2 h-4 w-4" />
-                Copy link
-              </Button>
+            <div className="grid gap-4 py-4">
+              <FormField
+                control={addProfileForm.control}
+                name="full_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full name</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        autoComplete="name"
+                        placeholder="Jane Smith"
+                        disabled={addProfileSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addProfileForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="email"
+                        autoComplete="email"
+                        placeholder="jane@example.com"
+                        disabled={addProfileSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addProfileForm.control}
+                name="linkedin_url"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>LinkedIn URL</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="url"
+                        placeholder="https://linkedin.com/in/…"
+                        autoComplete="off"
+                        disabled={addProfileSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => closeAddProfileDialog()}
-                disabled={sendInviteSubmitting}
+                disabled={addProfileSubmitting}
               >
-                Done
+                Cancel
               </Button>
-              <Button type="button" onClick={() => void handleSendInviteEmail()} disabled={sendInviteSubmitting}>
-                {sendInviteSubmitting ? (
+              <Button type="submit" disabled={addProfileSubmitting}>
+                {addProfileSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Sending…
                   </>
                 ) : (
-                  "Send email"
+                  "Add profile"
                 )}
               </Button>
             </DialogFooter>
-          </>
-        )}
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
 
