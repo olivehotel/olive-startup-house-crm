@@ -97,7 +97,7 @@ export default function CommunicationPage() {
           <CardContent className="p-4 text-center">
             <Calendar className="h-6 w-6 mx-auto text-amber-600 dark:text-amber-400" />
             <p className="text-2xl font-bold mt-2">{toursCount}</p>
-            <p className="text-sm text-muted-foreground">Tours</p>
+            <p className="text-sm text-muted-foreground">Tours/Phone call</p>
           </CardContent>
         </Card>
         <Card className="hover-elevate cursor-pointer">

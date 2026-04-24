@@ -209,7 +209,7 @@ export default function Dashboard() {
               <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Calendar className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-lg font-bold mt-1">{communicationTours}</p>
-                <p className="text-xs text-muted-foreground">Tours</p>
+                <p className="text-xs text-muted-foreground">Tours/Phone call</p>
               </div>
               <div className="text-center p-1 sm:p-2 rounded-md bg-muted/50">
                 <Receipt className="h-4 w-4 mx-auto text-muted-foreground" />

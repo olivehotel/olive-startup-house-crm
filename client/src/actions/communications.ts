@@ -95,15 +95,3 @@ export const createGuestInvite = (payload: CreateGuestInvitePayload) =>
     method: "POST",
     body: payload,
   });
-
-/** Dev cleanup: remove all communication records for a mailbox in Communication Center. */
-export function deleteAllCommunicationsByEmail(email: string) {
-  const normalized = email.trim();
-  if (!normalized) {
-    return Promise.reject(new Error("Email is required"));
-  }
-  return apiFetch<Record<string, unknown>>("dev-delete-all-communications-by-email", {
-    method: "POST",
-    body: { email: normalized },
-  });
-}

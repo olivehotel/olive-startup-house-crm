@@ -13,6 +13,7 @@ import { LeadCommunicationLink } from "@/components/lead-communication-link";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@shared/schema";
 import { LEAD_STATUS_BADGE_CLASSES } from "@/lib/lead-status-badge-classes";
+import { MessageSquare } from "lucide-react";
 
 export function formatLeadCreatedRelative(dateString: string) {
   const date = new Date(dateString);
@@ -50,11 +51,17 @@ export function LeadsTable({ leads, variant = "page" }: LeadsTableProps) {
             <TableHead className="w-[14%] min-w-0">Email</TableHead>
             <TableHead className="w-[9%] min-w-0">Phone</TableHead>
             <TableHead className="w-[12%] min-w-0">Location</TableHead>
-            <TableHead className="w-[20%] min-w-0">Message</TableHead>
+            <TableHead className="w-[19%] min-w-0">Message</TableHead>
             <TableHead className="w-[10%] min-w-0">Status</TableHead>
             <TableHead className="w-[9%] min-w-0">Created</TableHead>
-            <TableHead className="w-[15%] min-w-0 text-right whitespace-nowrap">
+            <TableHead className="w-[11%] min-w-0 text-right whitespace-nowrap">
               Actions
+            </TableHead>
+            <TableHead className="w-[5%] min-w-0 p-2 text-right whitespace-nowrap">
+              <span className="inline-flex items-center justify-end w-full text-primary">
+                <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                <span className="sr-only">Open communication</span>
+              </span>
             </TableHead>
           </TableRow>
         </TableHeader>
@@ -107,14 +114,14 @@ export function LeadsTable({ leads, variant = "page" }: LeadsTableProps) {
                 {formatLeadCreatedRelative(lead.createdAt)}
               </TableCell>
               <TableCell className="text-right w-px whitespace-nowrap">
-                <div className="flex justify-end items-center gap-2">
-                  <LeadPaymentPendingButton
-                    lead={lead}
-                    whenHidden="dash"
-                    className="text-xs h-8 gap-1 whitespace-nowrap shrink-0"
-                  />
-                  <LeadCommunicationLink lead={lead} compact />
-                </div>
+                <LeadPaymentPendingButton
+                  lead={lead}
+                  whenHidden="dash"
+                  className="text-xs h-8 gap-1 whitespace-nowrap shrink-0"
+                />
+              </TableCell>
+              <TableCell className="text-right w-px whitespace-nowrap">
+                <LeadCommunicationLink lead={lead} compact />
               </TableCell>
             </TableRow>
           ))}

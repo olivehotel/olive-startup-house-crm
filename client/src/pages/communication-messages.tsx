@@ -754,6 +754,7 @@ export default function CommunicationMessagesPage() {
   }, [data?.pages]);
 
   const leadId = comm?.lead_id ?? undefined;
+  const quickActionsLocked = !leadId;
   const { data: linkedLead, isLoading: leadLoading } = useQuery<Lead>({
     queryKey: ["communication-lead", communicationId, leadId],
     queryFn: () => fetchLeadByIdFromSupabase(leadId!),
@@ -1302,16 +1303,39 @@ export default function CommunicationMessagesPage() {
               </Button>
             )}
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 px-2"
-                  aria-label="Quick actions"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
+              {quickActionsLocked ? (
+                <Tooltip delayDuration={200}>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex shrink-0">
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 px-2"
+                          aria-label="Quick actions"
+                          disabled
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    Link a lead to this thread first (e.g. &quot;Made to lead&quot;).
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 px-2"
+                    aria-label="Quick actions"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+              )}
               <DropdownMenuContent
                 align={isMobile ? "start" : "end"}
                 collisionPadding={8}
@@ -1396,61 +1420,36 @@ export default function CommunicationMessagesPage() {
                     </div>
                   </div>
                 </DropdownMenuItem>
-                {leadId ? (
-                  <DropdownMenuItem
-                    className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
-                    disabled={!comm || createAccountSubmitting}
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      if (!comm) {
-                        toast({
-                          title: "Could not open form",
-                          description: "No communication loaded.",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-                      setCreateAccountOpen(true);
-                    }}
-                  >
-                    <div className="flex items-start gap-2">
-                      {createAccountSubmitting ? (
-                        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                      ) : (
-                        <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
-                      )}
-                      <div className="flex min-w-0 flex-col items-start gap-0">
-                        <span>Create account</span>
-                        <span className="text-xs text-muted-foreground">
-                          Guest portal (community)
-                        </span>
-                      </div>
+                <DropdownMenuItem
+                  className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
+                  disabled={!comm || createAccountSubmitting}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    if (!comm) {
+                      toast({
+                        title: "Could not open form",
+                        description: "No communication loaded.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    setCreateAccountOpen(true);
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    {createAccountSubmitting ? (
+                      <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                    ) : (
+                      <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
+                    )}
+                    <div className="flex min-w-0 flex-col items-start gap-0">
+                      <span>Create account</span>
+                      <span className="text-xs text-muted-foreground">
+                        Guest portal (community)
+                      </span>
                     </div>
-                  </DropdownMenuItem>
-                ) : (
-                  <Tooltip delayDuration={200}>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuItem
-                        className="h-auto flex-col items-stretch gap-0 py-2 cursor-not-allowed opacity-50"
-                        onSelect={(e) => e.preventDefault()}
-                        aria-disabled
-                      >
-                        <div className="flex items-start gap-2">
-                          <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
-                          <div className="flex min-w-0 flex-col items-start gap-0">
-                            <span>Create account</span>
-                            <span className="text-xs text-muted-foreground">
-                              Guest portal (community)
-                            </span>
-                          </div>
-                        </div>
-                      </DropdownMenuItem>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="max-w-xs">
-                      Link a lead to this thread first (e.g. &quot;Made to lead&quot;).
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                  </div>
+                </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="h-auto cursor-pointer gap-2 py-2 pl-2 pr-1 [&>svg:last-child]:ml-0">
                     <Receipt className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1502,52 +1501,27 @@ export default function CommunicationMessagesPage() {
                     )}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
-                {leadId ? (
-                  <DropdownMenuItem
-                    className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
-                    disabled={qualifyLeadMutation.isPending}
-                    onSelect={() => {
-                      qualifyLeadMutation.mutate();
-                    }}
-                  >
-                    <div className="flex items-start gap-2">
-                      {qualifyLeadMutation.isPending ? (
-                        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                      ) : (
-                        <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                      )}
-                      <div className="flex min-w-0 flex-col items-start gap-0">
-                        <span>Confirm payment</span>
-                        <span className="text-xs text-muted-foreground">
-                          Update lead after payment
-                        </span>
-                      </div>
+                <DropdownMenuItem
+                  className="h-auto cursor-pointer flex-col items-stretch gap-0 py-2"
+                  disabled={qualifyLeadMutation.isPending}
+                  onSelect={() => {
+                    qualifyLeadMutation.mutate();
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    {qualifyLeadMutation.isPending ? (
+                      <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                    ) : (
+                      <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                    )}
+                    <div className="flex min-w-0 flex-col items-start gap-0">
+                      <span>Confirm payment</span>
+                      <span className="text-xs text-muted-foreground">
+                        Update lead after payment
+                      </span>
                     </div>
-                  </DropdownMenuItem>
-                ) : (
-                  <Tooltip delayDuration={200}>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuItem
-                        className="h-auto flex-col items-stretch gap-0 py-2 cursor-not-allowed opacity-50"
-                        onSelect={(e) => e.preventDefault()}
-                        aria-disabled
-                      >
-                        <div className="flex items-start gap-2">
-                          <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                          <div className="flex min-w-0 flex-col items-start gap-0">
-                            <span>Confirm payment</span>
-                            <span className="text-xs text-muted-foreground">
-                              Update lead after payment
-                            </span>
-                          </div>
-                        </div>
-                      </DropdownMenuItem>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="max-w-xs">
-                      Convert to a lead first (use &quot;Made to lead&quot;).
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                  </div>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

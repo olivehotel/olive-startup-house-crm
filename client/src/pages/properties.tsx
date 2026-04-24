@@ -1,37 +1,12 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { PropertyCard } from "@/components/property-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { useUserRole } from "@/hooks/use-user-role";
-import {
-  COMMUNICATION_TOTALS_QUERY_KEY,
-  deleteAllCommunicationsByEmail,
-} from "@/actions/communications";
-import { Plus, Building2, BedDouble, DoorOpen, DollarSign, Loader2, Trash2 } from "lucide-react";
+import { Plus, Building2, BedDouble, DoorOpen, DollarSign } from "lucide-react";
 import type { Property } from "@shared/schema";
 
 export default function PropertiesPage() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { canViewCommunityAdminProfiles } = useUserRole();
-  const [deleteCommsOpen, setDeleteCommsOpen] = useState(false);
-  const [deleteCommsEmail, setDeleteCommsEmail] = useState("");
-  const [deletingComms, setDeletingComms] = useState(false);
-
   const { data: properties, isLoading } = useQuery<Property[]>({
     queryKey: ["/api/properties"],
   });
@@ -42,44 +17,6 @@ export default function PropertiesPage() {
   const occupiedRooms = properties?.reduce((sum, p) => sum + p.occupiedRooms, 0) || 0;
   const totalRevenue = properties?.reduce((sum, p) => sum + p.monthlyRevenue, 0) || 0;
 
-  const closeDeleteCommsDialog = () => {
-    if (deletingComms) return;
-    setDeleteCommsEmail("");
-    setDeleteCommsOpen(false);
-  };
-
-  const submitDeleteComms = async () => {
-    const parsed = z.string().email("Enter a valid email address").safeParse(deleteCommsEmail.trim());
-    if (!parsed.success) {
-      toast({
-        title: "Invalid email",
-        description: parsed.error.issues[0]?.message ?? "Invalid email",
-        variant: "destructive",
-      });
-      return;
-    }
-    setDeletingComms(true);
-    try {
-      await deleteAllCommunicationsByEmail(parsed.data);
-      toast({
-        title: "Communications removed",
-        description: `Removed Communication Center data for ${parsed.data}.`,
-      });
-      setDeleteCommsEmail("");
-      setDeleteCommsOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ["communications"] });
-      await queryClient.invalidateQueries({ queryKey: COMMUNICATION_TOTALS_QUERY_KEY });
-    } catch (err) {
-      toast({
-        title: "Delete failed",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
-      });
-    } finally {
-      setDeletingComms(false);
-    }
-  };
-
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -88,24 +25,10 @@ export default function PropertiesPage() {
           <h1 className="text-2xl font-bold">Properties</h1>
           <p className="text-muted-foreground">Manage all Olive Startup House properties</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button data-testid="button-add-property">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Property
-          </Button>
-          {canViewCommunityAdminProfiles && (
-            <Button
-              type="button"
-              data-testid="button-delete-communications"
-              variant="outline"
-              className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setDeleteCommsOpen(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete communications
-            </Button>
-          )}
-        </div>
+        <Button data-testid="button-add-property">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Property
+        </Button>
       </div>
 
       {/* Stats */}
@@ -165,62 +88,6 @@ export default function PropertiesPage() {
           ))
         )}
       </div>
-
-      <Dialog
-        open={deleteCommsOpen}
-        onOpenChange={(open) => {
-          if (!open) closeDeleteCommsDialog();
-        }}
-      >
-        <DialogContent
-          className="sm:max-w-md"
-          onPointerDownOutside={(e) => {
-            if (deletingComms) e.preventDefault();
-          }}
-          onEscapeKeyDown={(e) => {
-            if (deletingComms) e.preventDefault();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Delete communications by email</DialogTitle>
-            <DialogDescription>
-              This removes Communication Center data for the address you enter. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="delete-comms-email">Email</Label>
-            <Input
-              id="delete-comms-email"
-              type="email"
-              autoComplete="email"
-              placeholder="name@gmail.com"
-              value={deleteCommsEmail}
-              onChange={(e) => setDeleteCommsEmail(e.target.value)}
-              disabled={deletingComms}
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeDeleteCommsDialog} disabled={deletingComms}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => void submitDeleteComms()}
-              disabled={deletingComms}
-            >
-              {deletingComms ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting…
-                </>
-              ) : (
-                "Delete"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
