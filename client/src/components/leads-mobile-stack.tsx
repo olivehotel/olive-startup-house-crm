@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TruncatedCell } from "@/components/truncated-cell";
 import { LeadPaymentPendingButton } from "@/components/lead-payment-pending-button";
+import { LeadCommunicationLink } from "@/components/lead-communication-link";
 import { LeadsTable, formatLeadCreatedRelative } from "@/components/leads-table";
 import { getLeadStatusBadgeClass } from "@/lib/lead-status-badge-classes";
 import { cn } from "@/lib/utils";
@@ -94,11 +95,17 @@ export function LeadsMobileStack({ leads }: LeadsMobileStackProps) {
             <span className="text-xs text-muted-foreground">
               {formatLeadCreatedRelative(lead.createdAt)}
             </span>
-            <LeadPaymentPendingButton
-              lead={lead}
-              whenHidden="dash"
-              className="text-xs h-9 gap-1 whitespace-nowrap shrink-0 w-full max-w-xs"
-            />
+            <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+              <LeadPaymentPendingButton
+                lead={lead}
+                whenHidden="dash"
+                className="text-xs h-9 gap-1 whitespace-nowrap shrink-0 w-full"
+              />
+              <LeadCommunicationLink
+                lead={lead}
+                className="text-xs h-9 w-full justify-center"
+              />
+            </div>
             <Badge
               variant="secondary"
               className={cn(

@@ -121,6 +121,7 @@ export function mapSupabaseLeadRow(row: Record<string, unknown>): Lead {
     notes: pickString(row, "notes"),
     avatar: pickString(row, "avatar"),
     createdAt: pickCreatedAt(row),
+    communicationId: pickString(row, "communication_id", "communicationId"),
   };
 }
 

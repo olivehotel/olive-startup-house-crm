@@ -62,6 +62,8 @@ export interface Lead {
   notes?: string;
   avatar?: string;
   createdAt: string;
+  /** Linked Communication Center thread (e.g. lead created from a communication) */
+  communicationId?: string;
 }
 
 export const insertLeadSchema = z.object({

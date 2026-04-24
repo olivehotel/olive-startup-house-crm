@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import { TruncatedCell } from "@/components/truncated-cell";
 import { LeadPaymentPendingButton } from "@/components/lead-payment-pending-button";
+import { LeadCommunicationLink } from "@/components/lead-communication-link";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@shared/schema";
 import { LEAD_STATUS_BADGE_CLASSES } from "@/lib/lead-status-badge-classes";
@@ -106,12 +107,13 @@ export function LeadsTable({ leads, variant = "page" }: LeadsTableProps) {
                 {formatLeadCreatedRelative(lead.createdAt)}
               </TableCell>
               <TableCell className="text-right w-px whitespace-nowrap">
-                <div className="flex justify-end">
+                <div className="flex justify-end items-center gap-2">
                   <LeadPaymentPendingButton
                     lead={lead}
                     whenHidden="dash"
                     className="text-xs h-8 gap-1 whitespace-nowrap shrink-0"
                   />
+                  <LeadCommunicationLink lead={lead} compact />
                 </div>
               </TableCell>
             </TableRow>
